@@ -48,6 +48,11 @@ TEST(TestJsonWriter, Floats)
 {
     {
         std::string out{};
+        jsonwriter::write(std::back_inserter(out), 0.0);
+        EXPECT_EQ(out, "0");
+    }
+    {
+        std::string out{};
         jsonwriter::write(std::back_inserter(out), 3.5);
         EXPECT_EQ(out, "35e-1");
     }
