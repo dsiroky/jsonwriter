@@ -33,7 +33,7 @@ constexpr std::array<int, 10000> large_int_list{};
 const auto large_bool_vector = std::invoke([]() {
     std::vector<bool> v{};
     bool value{false};
-    for (int i{0}; i < 10000; ++i) {
+    for (int i{0}; i < 20000; ++i) {
         v.push_back(value);
         value = !value;
     }
@@ -166,7 +166,7 @@ void BM_backinsert_large_strings(benchmark::State& state)
 }
 BENCHMARK(BM_backinsert_large_strings);
 
-void BM_copy_large_strings(benchmark::State& state)
+void BM_copy_large_strings_no_backinsert(benchmark::State& state)
 {
     auto out = fmt::memory_buffer();
     out.resize(large_vector.size() * large_vector[0].size());
@@ -180,9 +180,9 @@ void BM_copy_large_strings(benchmark::State& state)
         benchmark::ClobberMemory();
     }
 }
-BENCHMARK(BM_copy_large_strings);
+BENCHMARK(BM_copy_large_strings_no_backinsert);
 
-void BM_copy_if_large_strings(benchmark::State& state)
+void BM_copy_if_large_strings_no_backinsert(benchmark::State& state)
 {
     auto out = fmt::memory_buffer();
     out.resize(large_vector.size() * large_vector[0].size());
@@ -196,6 +196,6 @@ void BM_copy_if_large_strings(benchmark::State& state)
         benchmark::ClobberMemory();
     }
 }
-BENCHMARK(BM_copy_if_large_strings);
+BENCHMARK(BM_copy_if_large_strings_no_backinsert);
 
 } // namespace

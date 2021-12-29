@@ -96,8 +96,8 @@ TEST(TestJsonWriter, Strings)
     }
     {
         std::string out{};
-        jsonwriter::write(std::back_inserter(out), "ab\"\t\f\r\n\b\\de\x01\x1f ř漢語zzz");
-        EXPECT_EQ(out, "\"ab\\\"\\t\\f\\r\\n\\b\\\\de\\u0001\\u001f ř漢語zzz\"");
+        jsonwriter::write(std::back_inserter(out), "ab\"\t\f\r\n\b\\de\x01\x1f ř\xff漢語zzz");
+        EXPECT_EQ(out, "\"ab\\\"\\t\\f\\r\\n\\b\\\\de\\u0001\\u001f ř\xff漢語zzz\"");
     }
 }
 

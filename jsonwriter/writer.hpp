@@ -7,7 +7,15 @@
 
 #include <fmt/format.h>
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wshadow"
+#pragma GCC diagnostic ignored "-Wold-style-cast"
+#pragma GCC diagnostic ignored "-Wsign-conversion"
+#ifdef __clang__
+#pragma GCC diagnostic ignored "-Wshorten-64-to-32"
+#endif
 #include <jsonwriter/erthink/erthink_d2a.h++>
+#pragma GCC diagnostic pop
 
 namespace jsonwriter {
 
@@ -45,9 +53,9 @@ struct EscapeMaps
             const auto set_item = [this, i](const auto& source, const size_t count) {
                 for (size_t ofs{0}; ofs < count; ++ofs) {
                     char_map[i].first[ofs] = source[ofs];
-                    char_map[i].second = static_cast<uint8_t>(count);
-                    is_escaped[i] = true;
                 }
+                char_map[i].second = static_cast<uint8_t>(count);
+                is_escaped[i] = true;
             };
 
             is_escaped[i] = false;
@@ -115,7 +123,7 @@ struct FormatterInt
     {
         static_assert(std::is_integral_v<T>);
         fmt::format_int str{value};
-        return std::copy(str.data(), str.data() + str.size(), output);
+        return std::copy_n(str.data(), str.size(), output);
     }
 };
 
