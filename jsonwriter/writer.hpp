@@ -180,7 +180,7 @@ struct Formatter<std::string_view>
         *output = '"';
         ++output;
         for (const auto c : value) {
-            if (detail::escape_maps.is_escaped[static_cast<uint8_t>(c)]) {
+            if (erthink_unlikely(detail::escape_maps.is_escaped[static_cast<uint8_t>(c)])) {
                 const auto& [replacement, len]
                     = detail::escape_maps.char_map[static_cast<uint8_t>(c)];
                 output = std::copy_n(replacement.begin(), len, output);
