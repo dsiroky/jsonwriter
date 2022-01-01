@@ -13,8 +13,6 @@ int main(int argc, char* argv[])
 
 //==========================================================================
 
-namespace {
-
 TEST(TestJsonWriter, Integers)
 {
     {
@@ -184,7 +182,7 @@ TEST(TestJsonWriter, CheckWorkWithGenericIterators)
     std::array<char, 100> out{};
     // no back inserter
     auto end = jsonwriter::write(out.begin(),
-        [](jsonwriter::Object<decltype(out)::iterator>& object) {
+        [](auto& object) {
               object["k1"] = "c\td";
               object["k\n2"] = {3, 5, 6};
               object["k3"] = 87;
@@ -196,4 +194,52 @@ TEST(TestJsonWriter, CheckWorkWithGenericIterators)
       "{\"k1\":\"c\\td\",\"k\\n2\":[3,5,6],\"k3\":87,\"k4\":[\"\\\\\"],\"k5\":35e-1,\"k6\":true}");
 }
 
-} //
+enum class SomeEnum { RED, GREEN, BLUE };
+
+template<>
+struct jsonwriter::Formatter<SomeEnum>
+{
+    template<typename Iterator>
+    static Iterator write(Iterator output, const SomeEnum value)
+    {
+        switch (value) {
+            case SomeEnum::RED:
+                return std::copy_n("red", 3, output);
+            case SomeEnum::GREEN:
+                return std::copy_n("green", 5, output);
+            case SomeEnum::BLUE:
+                return std::copy_n("blue", 4, output);
+            default:
+                return std::copy_n("n/a", 3, output);
+        }
+    }
+};
+
+TEST(TestJsonWriter, CustomEnumLabel)
+{
+    std::string out{};
+    jsonwriter::write(std::back_inserter(out), SomeEnum::GREEN);
+    EXPECT_EQ(out, "green");
+}
+
+struct SomeStruct
+{
+    int a{42};
+};
+
+template<>
+struct jsonwriter::Formatter<SomeStruct>
+{
+    template<typename Iterator>
+    static Iterator write(Iterator output, const SomeStruct& value)
+    {
+        return jsonwriter::write(output, [&value](auto& object) { object["a"] = value.a; });
+    }
+};
+
+TEST(TestJsonWriter, CustomStruct)
+{
+    std::string out{};
+    jsonwriter::write(std::back_inserter(out), SomeStruct{});
+    EXPECT_EQ(out, "{\"a\":42}");
+}
