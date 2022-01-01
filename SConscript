@@ -18,5 +18,5 @@ fmt_env.AppendUnique(CPPPATH=["3rdparty/fmt/include"])
 fmt_lib = fmt_env.StaticLibrary("fmt", Glob("3rdparty/fmt/src/*.cc"))
 
 env.AppendUnique(LIBS=[fmt_lib, gtest_lib, gbenchmark_lib])
-env.Program("test", "test.cpp")
+env.Program("test", ["test.cpp", "odr.cpp"])
 env.Program("benchmark", "benchmark.cpp")

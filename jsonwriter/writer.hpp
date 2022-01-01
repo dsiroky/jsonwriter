@@ -24,6 +24,9 @@
 
 namespace jsonwriter {
 
+template<typename Iterator, typename T>
+Iterator write(Iterator output, T&& value);
+
 namespace detail {
 
 template<typename Iterator>
@@ -218,13 +221,13 @@ struct FormatterList
         ++output;
         auto it = container.begin();
         if (it != container.end()) {
-            output = Formatter<std::decay_t<decltype(*it)>>::write(output, *it);
+            output = jsonwriter::write(output, *it);
             ++it;
         }
         for (; it != container.end(); ++it) {
             *output = ',';
             ++output;
-            output = Formatter<std::decay_t<decltype(*it)>>::write(output, *it);
+            output = jsonwriter::write(output, *it);
         }
         *output = ']';
         ++output;
@@ -279,8 +282,7 @@ template<typename Iterator, typename T>
 Iterator write(Iterator output, T&& value)
 {
     if constexpr (std::is_convertible_v<T, detail::ObjectCallback<Iterator>>) {
-        return Formatter<detail::ObjectCallback<Iterator>>::write(
-            output, detail::ObjectCallback<Iterator>{value});
+        return Formatter<detail::ObjectCallback<Iterator>>::write(output, value);
     } else {
         return Formatter<std::decay_t<T>>::write(output, std::forward<T>(value));
     }
