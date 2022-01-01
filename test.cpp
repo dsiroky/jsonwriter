@@ -105,7 +105,13 @@ TEST(TestJsonWriter, ListLikeContainers)
 {
     {
         std::string out{};
+        // initializer list
         jsonwriter::write(std::back_inserter(out), {33, 44});
+        EXPECT_EQ(out, "[33,44]");
+    }
+    {
+        std::string out{};
+        jsonwriter::write(std::back_inserter(out), std::initializer_list<int>{33, 44});
         EXPECT_EQ(out, "[33,44]");
     }
     {
@@ -117,6 +123,26 @@ TEST(TestJsonWriter, ListLikeContainers)
         std::string out{};
         jsonwriter::write(std::back_inserter(out), std::vector<std::string>{"ab", "c", "de\rf"});
         EXPECT_EQ(out, "[\"ab\",\"c\",\"de\\rf\"]");
+    }
+    {
+        std::string out{};
+        jsonwriter::write(std::back_inserter(out), std::array<int, 3>{{33, 44, 999}});
+        EXPECT_EQ(out, "[33,44,999]");
+    }
+    {
+        std::string out{};
+        jsonwriter::write(std::back_inserter(out), std::deque<int>{33, 44, 999});
+        EXPECT_EQ(out, "[33,44,999]");
+    }
+    {
+        std::string out{};
+        jsonwriter::write(std::back_inserter(out), std::forward_list<int>{33, 44, 999});
+        EXPECT_EQ(out, "[33,44,999]");
+    }
+    {
+        std::string out{};
+        jsonwriter::write(std::back_inserter(out), std::list<int>{33, 44, 999});
+        EXPECT_EQ(out, "[33,44,999]");
     }
 }
 

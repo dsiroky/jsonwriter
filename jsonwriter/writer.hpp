@@ -2,8 +2,13 @@
 #ifndef WRITER_HPP__VHIS1CJC
 #define WRITER_HPP__VHIS1CJC
 
+#include <array>
+#include <deque>
+#include <forward_list>
 #include <initializer_list>
+#include <list>
 #include <utility>
+#include <vector>
 
 #include <fmt/format.h>
 
@@ -230,6 +235,9 @@ struct FormatterList
 template<typename T> struct Formatter<std::initializer_list<T>> : FormatterList { };
 template<typename T> struct Formatter<std::vector<T>> : FormatterList { };
 template<typename T, size_t N> struct Formatter<std::array<T, N>> : FormatterList { };
+template<typename T> struct Formatter<std::deque<T>> : FormatterList { };
+template<typename T> struct Formatter<std::forward_list<T>> : FormatterList { };
+template<typename T> struct Formatter<std::list<T>> : FormatterList { };
 
 /// A proxy to provide `object[key] = value` semantics.
 template<typename Iterator>
