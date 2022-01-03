@@ -13,6 +13,15 @@ int main(int argc, char* argv[])
 
 //==========================================================================
 
+TEST(TestJsonWriter, Char)
+{
+    {
+        std::string out{};
+        jsonwriter::write(std::back_inserter(out), char{'A'});
+        EXPECT_EQ(out, "\"A\"");
+    }
+}
+
 TEST(TestJsonWriter, Integers)
 {
     {
@@ -40,6 +49,45 @@ TEST(TestJsonWriter, Integers)
         jsonwriter::write(std::back_inserter(out), std::numeric_limits<int64_t>::min());
         EXPECT_EQ(out, "-9223372036854775808");
     }
+
+    const auto f = [](auto value) {
+        std::string out{};
+        jsonwriter::write(std::back_inserter(out), value);
+        EXPECT_EQ(out, "42");
+    };
+
+    f(int8_t{42});
+    f(uint8_t{42});
+    f(int16_t{42});
+    f(uint16_t{42});
+    f(int32_t{42});
+    f(uint32_t{42});
+    f(int64_t{42});
+    f(uint64_t{42});
+
+    f(static_cast<signed short>(42));
+    f(static_cast<short>(42));
+    f(static_cast<unsigned short>(42));
+
+    f(static_cast<signed int>(42));
+    f(static_cast<int>(42));
+    f(static_cast<unsigned int>(42));
+
+    f(static_cast<signed long>(42));
+    f(static_cast<long>(42));
+    f(static_cast<unsigned long>(42));
+
+    f(static_cast<signed long int>(42));
+    f(static_cast<long int>(42));
+    f(static_cast<unsigned long int>(42));
+
+    f(static_cast<signed long long>(42));
+    f(static_cast<long long>(42));
+    f(static_cast<unsigned long long>(42));
+
+    f(static_cast<signed long int>(42));
+    f(static_cast<long long int>(42));
+    f(static_cast<unsigned long long int>(42));
 }
 
 TEST(TestJsonWriter, Floats)
@@ -96,6 +144,52 @@ TEST(TestJsonWriter, Strings)
         std::string out{};
         jsonwriter::write(std::back_inserter(out), "ab\"\t\f\r\n\b\\de\x01\x1f ř\xff漢語zzz");
         EXPECT_EQ(out, "\"ab\\\"\\t\\f\\r\\n\\b\\\\de\\u0001\\u001f ř\xff漢語zzz\"");
+    }
+}
+
+TEST(TestJsonWriter, Optional)
+{
+    {
+        std::string out{};
+        jsonwriter::write(std::back_inserter(out), std::nullopt);
+        EXPECT_EQ(out, "null");
+    }
+    {
+        std::string out{};
+        jsonwriter::write(std::back_inserter(out), std::optional<int>{});
+        EXPECT_EQ(out, "null");
+    }
+
+    {
+        std::string out{};
+        jsonwriter::write(std::back_inserter(out), std::optional<std::string>{});
+        EXPECT_EQ(out, "null");
+    }
+    {
+        std::string out{};
+        jsonwriter::write(std::back_inserter(out), std::optional<int>{2349});
+        EXPECT_EQ(out, "2349");
+    }
+    {
+        std::string out{};
+        jsonwriter::write(std::back_inserter(out), std::optional<std::string>{"abc"});
+        EXPECT_EQ(out, "\"abc\"");
+    }
+
+    {
+        std::string out{};
+        jsonwriter::write(std::back_inserter(out), std::optional<bool>{});
+        EXPECT_EQ(out, "null");
+    }
+    {
+        std::string out{};
+        jsonwriter::write(std::back_inserter(out), std::optional<bool>{false});
+        EXPECT_EQ(out, "false");
+    }
+    {
+        std::string out{};
+        jsonwriter::write(std::back_inserter(out), std::optional<bool>{true});
+        EXPECT_EQ(out, "true");
     }
 }
 

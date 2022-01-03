@@ -7,6 +7,8 @@
 #include <forward_list>
 #include <initializer_list>
 #include <list>
+#include <optional>
+#include <type_traits>
 #include <utility>
 #include <vector>
 
@@ -119,12 +121,15 @@ template<typename Iterator>
 class Object;
 
 /// Similar to fmt::formatter. Specialize the template for custom types.
-template<typename T>
-class Formatter
-{ };
+/// T2 template parameter is for custom use, e.g. a conditional specialization.
+template<typename T, typename T2 = void>
+struct Formatter
+{
+    Formatter() = delete;
+};
 
 template<typename T>
-struct FormatterInt
+struct Formatter<T, typename std::enable_if_t<std::is_integral_v<T>>>
 {
     template<typename Iterator>
     static Iterator write(Iterator output, const T value)
@@ -135,30 +140,19 @@ struct FormatterInt
     }
 };
 
-template<> struct Formatter<int8_t> : FormatterInt<int8_t> { };
-template<> struct Formatter<uint8_t> : FormatterInt<uint8_t> { };
-template<> struct Formatter<int16_t> : FormatterInt<int16_t> { };
-template<> struct Formatter<uint16_t> : FormatterInt<uint16_t> { };
-template<> struct Formatter<int32_t> : FormatterInt<int32_t> { };
-template<> struct Formatter<uint32_t> : FormatterInt<uint32_t> { };
-template<> struct Formatter<int64_t> : FormatterInt<int64_t> { };
-template<> struct Formatter<uint64_t> : FormatterInt<uint64_t> { };
-
-template<typename T>
 struct FormatterFloat
 {
     template<typename Iterator>
     static Iterator write(Iterator output, const double value)
     {
-        static_assert(std::is_floating_point_v<T>);
         std::array<char, erthink::d2a_max_chars> buf;
         const auto end = erthink::d2a(value, buf.begin());
         return std::copy(buf.begin(), end, output);
     }
 };
 
-template<> struct Formatter<float> : FormatterFloat<float> { };
-template<> struct Formatter<double> : FormatterFloat<double> { };
+template<> struct Formatter<float> : FormatterFloat { };
+template<> struct Formatter<double> : FormatterFloat { };
 
 template<>
 struct Formatter<bool>
@@ -208,7 +202,41 @@ struct Formatter<const char (&)[N]>
     static Iterator write(Iterator output, const char* value)
     {
         // -1 to avoid the null termination character
-        return Formatter<std::string_view>::write(output, std::string_view{value, N - 1});
+        return jsonwriter::write(output, std::string_view{value, N - 1});
+    }
+};
+
+template<>
+struct Formatter<char>
+{
+    template<typename Iterator>
+    static Iterator write(Iterator output, const char value)
+    {
+        return jsonwriter::write(output, std::string_view{&value, 1});
+    }
+};
+
+template<>
+struct Formatter<std::nullopt_t>
+{
+    template<typename Iterator>
+    static Iterator write(Iterator output, const std::nullopt_t)
+    {
+        return std::copy_n("null", 4, output);
+    }
+};
+
+template<typename T>
+struct Formatter<std::optional<T>>
+{
+    template<typename Iterator>
+    static Iterator write(Iterator output, const std::optional<T>& value)
+    {
+        if (value.has_value()) {
+            return jsonwriter::write(output, *value);
+        } else {
+            return jsonwriter::write(output, std::nullopt);
+        }
     }
 };
 
