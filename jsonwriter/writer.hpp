@@ -196,7 +196,7 @@ template<> struct Formatter<const char*> : Formatter<std::string_view> { };
 template<> struct Formatter<std::string> : Formatter<std::string_view> { };
 
 template<size_t N>
-struct Formatter<const char (&)[N]>
+struct Formatter<char[N]>
 {
     template<typename Iterator>
     static Iterator write(Iterator output, const char* value)
@@ -312,7 +312,8 @@ Iterator write(Iterator output, T&& value)
     if constexpr (std::is_convertible_v<T, detail::ObjectCallback<Iterator>>) {
         return Formatter<detail::ObjectCallback<Iterator>>::write(output, value);
     } else {
-        return Formatter<std::decay_t<T>>::write(output, std::forward<T>(value));
+        return Formatter<std::remove_cv_t<std::remove_reference_t<T>>>::write(
+            output, std::forward<T>(value));
     }
 }
 
