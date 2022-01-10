@@ -53,6 +53,7 @@ void BM_json_simple_small_struct(benchmark::State& state)
                 nested_object["o1"] = {1, 2, 999999999};
                 nested_object["o2"] = false;
                 nested_object["o\r3"] = "i\no";
+                nested_object["o4"] = 'c';
             };
             object["k3"] = false;
             object["k4"] = 234.345678;
@@ -75,6 +76,7 @@ void BM_json_simple_small_struct_no_backinsert(benchmark::State& state)
                 nested_object["o1"] = {1, 2, 999999999};
                 nested_object["o2"] = false;
                 nested_object["o\r3"] = "i\no";
+                nested_object["o4"] = 'c';
             };
             object["k3"] = false;
             object["k4"] = 234.345678;

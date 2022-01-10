@@ -6,10 +6,10 @@ import time
 #==========================================================================
 # build options
 
-OPTIMIZATION_CHOICES = ["none", "full"]
+OPTIMIZATION_CHOICES = ["none", "devel", "full"]
 AddOption("--optimization",
           dest="optimization",
-          default="none",
+          default="devel",
           nargs=1,
           choices=OPTIMIZATION_CHOICES,
           help="Optimization level [{}]. (default: %default)".format("|".join(OPTIMIZATION_CHOICES)))
@@ -148,6 +148,8 @@ if "clang" in env["CC"]:
 
 if env["OPTIMIZATION"] == "none":
     env.AppendUnique(CCFLAGS=["-O0"])
+elif env["OPTIMIZATION"] == "devel":
+    env.AppendUnique(CCFLAGS=["-Og"])
 elif env["OPTIMIZATION"] == "full":
     env.AppendUnique(
         CCFLAGS=["-O3"],

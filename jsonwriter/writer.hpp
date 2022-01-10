@@ -174,20 +174,17 @@ struct Formatter<std::string_view>
     template<typename Iterator>
     static Iterator write(Iterator output, const std::string_view value)
     {
-        *output = '"';
-        ++output;
+        *output++ = '"';
         for (const auto c : value) {
             if (erthink_unlikely(detail::escape_maps.is_escaped[static_cast<uint8_t>(c)])) {
                 const auto& [replacement, len]
                     = detail::escape_maps.char_map[static_cast<uint8_t>(c)];
                 output = std::copy_n(replacement.begin(), len, output);
             } else {
-                *output = c;
-                ++output;
+                *output++ = c;
             }
         }
-        *output = '"';
-        ++output;
+        *output++ = '"';
         return output;
     }
 };
@@ -212,7 +209,10 @@ struct Formatter<char>
     template<typename Iterator>
     static Iterator write(Iterator output, const char value)
     {
-        return jsonwriter::write(output, std::string_view{&value, 1});
+        *output++ = '"';
+        *output++ = value;
+        *output++ = '"';
+        return output;
     }
 };
 
@@ -245,20 +245,17 @@ struct FormatterList
     template<typename Iterator, typename Container>
     static Iterator write(Iterator output, const Container& container)
     {
-        *output = '[';
-        ++output;
+        *output++ = '[';
         auto it = container.begin();
         if (it != container.end()) {
             output = jsonwriter::write(output, *it);
             ++it;
         }
         for (; it != container.end(); ++it) {
-            *output = ',';
-            ++output;
+            *output++ = ',';
             output = jsonwriter::write(output, *it);
         }
-        *output = ']';
-        ++output;
+        *output++ = ']';
         return output;
     }
 };
@@ -281,7 +278,7 @@ public:
 
     detail::WriterIterRef<Iterator> operator[](const std::string_view key)
     {
-        if (m_counter > 0) {
+        if (erthink_likely(m_counter > 0)) {
             *m_output = ',';
             ++m_output;
         }
@@ -289,8 +286,7 @@ public:
         m_output = Formatter<std::string_view>::write(m_output, key);
         *m_output = ':';
         ++m_output;
-        detail::WriterIterRef<Iterator> m_writer{m_output};
-        return m_writer;
+        return detail::WriterIterRef<Iterator>{m_output};
     }
 
 private:
@@ -326,14 +322,13 @@ Iterator write(Iterator output, const std::initializer_list<T> value)
 template<typename Iterator>
 struct Formatter<detail::ObjectCallback<Iterator>>
 {
-    static Iterator write(Iterator output, const detail::ObjectCallback<Iterator> callback)
+    template<typename Callback>
+    static Iterator write(Iterator output, const Callback& callback)
     {
-        *output = '{';
-        ++output;
+        *output++ = '{';
         Object<Iterator> wo{output};
         callback(wo);
-        *output = '}';
-        ++output;
+        *output++ = '}';
         return output;
     }
 };
