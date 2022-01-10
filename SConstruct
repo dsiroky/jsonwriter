@@ -163,6 +163,7 @@ if env["OPTIMIZATION"] == "full":
             ],
         CCFLAGS=[
             "-feliminate-unused-debug-types",
+            "-fno-stack-protector",
             ],
     )
 else:
