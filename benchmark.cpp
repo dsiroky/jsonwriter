@@ -1,9 +1,8 @@
 #include <benchmark/benchmark.h>
 #include <fmt/format.h>
 
-#include <boost/container/static_vector.hpp>
-
 #include "jsonwriter/writer.hpp"
+#include "benchmark_common.hpp"
 
 int main(int argc, char* argv[])
 {
@@ -17,38 +16,7 @@ int main(int argc, char* argv[])
 
 namespace {
 
-//--------------------------------------------------------------------------
-
-const auto large_vector = std::invoke([]() {
-    std::vector<std::string> v{};
-    for (int i{0}; i < 1000; ++i) {
-        v.emplace_back("dddddddd\t\fddaaaa\r\naaaaaaaoooo\\\\\\oooooooo\"\"ooooiiiiiii"
-                       "\"iiiiiiiiiiiiiiigggggggs\fsssssssssssssssssssd");
-    }
-    return v;
-});
-
-const auto large_int_list = std::invoke([]() {
-    std::vector<int> v{};
-    for (int i{0}; i < 10000; ++i) {
-        v.push_back(i);
-    }
-    return v;
-});
-
-const auto large_bool_list = std::invoke([]() {
-    std::vector<bool> v{};
-    bool value{false};
-    for (int i{0}; i < 10000; ++i) {
-        v.push_back(value);
-        value = !value;
-    }
-    return v;
-});
-
-//--------------------------------------------------------------------------
-
-void BM_json_simple_small_struct(benchmark::State& state)
+void BM_jsonwriter_simple_small_struct(benchmark::State& state)
 {
     auto out = fmt::memory_buffer();
 
@@ -69,23 +37,23 @@ void BM_json_simple_small_struct(benchmark::State& state)
         out.clear();
     }
 }
-BENCHMARK(BM_json_simple_small_struct);
+BENCHMARK(BM_jsonwriter_simple_small_struct);
 
-void BM_json_large_strings(benchmark::State& state)
+void BM_jsonwriter_large_strings(benchmark::State& state)
 {
     auto out = fmt::memory_buffer();
-    out.reserve(large_vector.size() * large_vector[0].size() * 2);
+    out.reserve(large_string_list.size() * large_string_list[0].size() * 2);
 
     for (auto _ : state) {
-        jsonwriter::write(out, large_vector);
+        jsonwriter::write(out, large_string_list);
         benchmark::DoNotOptimize(out.data());
         benchmark::ClobberMemory();
         out.clear();
     }
 }
-BENCHMARK(BM_json_large_strings);
+BENCHMARK(BM_jsonwriter_large_strings);
 
-void BM_json_large_list_of_ints(benchmark::State& state)
+void BM_jsonwriter_large_list_of_ints(benchmark::State& state)
 {
     auto out = fmt::memory_buffer();
     out.reserve(large_int_list.size() * 10);
@@ -97,9 +65,9 @@ void BM_json_large_list_of_ints(benchmark::State& state)
         out.clear();
     }
 }
-BENCHMARK(BM_json_large_list_of_ints);
+BENCHMARK(BM_jsonwriter_large_list_of_ints);
 
-void BM_json_large_list_of_bools(benchmark::State& state)
+void BM_jsonwriter_large_list_of_bools(benchmark::State& state)
 {
     auto out = fmt::memory_buffer();
     out.reserve(large_bool_list.size() * 10);
@@ -110,6 +78,6 @@ void BM_json_large_list_of_bools(benchmark::State& state)
         benchmark::ClobberMemory();
     }
 }
-BENCHMARK(BM_json_large_list_of_bools);
+BENCHMARK(BM_jsonwriter_large_list_of_bools);
 
 } // namespace
