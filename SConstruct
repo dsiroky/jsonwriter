@@ -141,10 +141,10 @@ env.AppendUnique(
         ],
     )
 
-if "gcc" in env["CC"]:
-    env.AppendUnique(CCFLAGS=["-fmax-errors=10", ])
-if "clang" in env["CC"]:
-    env.AppendUnique(CCFLAGS=["-ferror-limit=10", ])
+if "clang" in env["CXX"]:
+    env.AppendUnique(CCFLAGS=["-ferror-limit=5", ])
+elif "g++" in env["CXX"]:
+    env.AppendUnique(CCFLAGS=["-fmax-errors=5", ])
 
 if env["OPTIMIZATION"] == "none":
     env.AppendUnique(CCFLAGS=["-O0"])

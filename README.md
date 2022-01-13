@@ -4,9 +4,8 @@
 * No intermediate values storage.
 
 Unlike generic libraries like https://github.com/nlohmann/json this library
-provides only serialization. The library doesn't do any value copying or memory
-allocations. The output buffer should be either a fixed array or a growing
-buffer via e.g. a back inserter.
+provides only serialization. The output buffer must have a contiguous storage,
+like `std::vector`.
 
 ## Dependencies
 

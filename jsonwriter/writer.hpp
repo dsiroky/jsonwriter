@@ -2,6 +2,7 @@
 #ifndef WRITER_HPP__VHIS1CJC
 #define WRITER_HPP__VHIS1CJC
 
+#include <algorithm>
 #include <array>
 #include <deque>
 #include <forward_list>
@@ -26,16 +27,104 @@
 
 namespace jsonwriter {
 
-template<typename Iterator, typename T>
-Iterator write(Iterator output, T&& value);
+/// Convenience wrapper for simpler/faster appending to a container.
+template<typename Container>
+class TailBuffer
+{
+public:
+    static_assert(std::is_same_v<decltype(*std::declval<Container>().begin()), char&>,
+                  "container's dereferenced begin() must reference to char");
+    static_assert(std::is_same_v<decltype(*std::declval<Container>().end()), char&>,
+                  "container's dereferenced end() must reference to char");
+
+    TailBuffer(Container& container)
+        : m_container{container}
+        , m_start{&*container.end()}
+    { }
+
+    TailBuffer(const TailBuffer&) = delete;
+    TailBuffer& operator=(const TailBuffer&) = delete;
+    TailBuffer(TailBuffer&&) = delete;
+    TailBuffer& operator=(TailBuffer&&) = delete;
+
+    /// Grow room by diff amount.
+    void grow(const size_t diff)
+    {
+        resize(m_container.size() + diff);
+    }
+
+    /// Shift the beginning by diff. Room is reduced by diff.
+    void consume(const size_t diff)
+    {
+        assert(m_start != nullptr);
+        assert(room() >= diff);
+        m_start += diff;
+    }
+
+    /// Fit the container size to the current consumed space.
+    void fit() { resize(m_start - &*(m_container.begin())); }
+
+    /// How much chars can fit without growing.
+    size_t room() const { return end() - begin(); }
+
+    char* begin() const
+    {
+        assert(m_start != nullptr);
+        return m_start;
+    }
+
+    char* end() const { return &*(m_container.end()); }
+
+    /// Adds the character and consumes 1.
+    void append_no_grow(const char c)
+    {
+        assert(m_start != nullptr);
+        assert(room() > 0);
+        *m_start = c;
+        consume(1);
+    }
+
+    /// Grows by 1, adds the character and consumes 1.
+    void append(const char c)
+    {
+        grow(1);
+        *m_start = c;
+        consume(1);
+    }
+
+    /// Grows, adds, consumes a C-string literal.
+    template<size_t N>
+    void append(const char (&c)[N])
+    {
+        // exclude null termination
+        grow(N - 1);
+        std::copy_n(c, N - 1, begin());
+        consume(N - 1);
+    }
+
+private:
+    void resize(const size_t count)
+    {
+        assert(m_start != nullptr);
+        const auto old_offset = m_start - &*(m_container.begin());
+        m_container.resize(count);
+        m_start = &*(m_container.begin()) + old_offset;
+    }
+
+    Container& m_container;
+    char* m_start{nullptr};
+};
+
+template<typename Output, typename T>
+void write(Output& output, T&& value);
 
 namespace detail {
 
-template<typename Iterator>
+template<typename Output>
 class WriterIterRef
 {
 public:
-    WriterIterRef(Iterator& output)
+    WriterIterRef(Output& output)
         : m_output{output}
     { }
 
@@ -46,7 +135,7 @@ public:
     void operator=(const std::initializer_list<T> list);
 
 private:
-    Iterator& m_output;
+    Output& m_output;
 };
 
 /// character -> output sequence
@@ -117,7 +206,7 @@ static constexpr EscapeMaps escape_maps{};
 
 } // namespace detail
 
-template<typename Iterator>
+template<typename Output>
 class Object;
 
 /// Similar to fmt::formatter. Specialize the template for custom types.
@@ -131,23 +220,27 @@ struct Formatter
 template<typename T>
 struct Formatter<T, typename std::enable_if_t<std::is_integral_v<T>>>
 {
-    template<typename Iterator>
-    static Iterator write(Iterator output, const T value)
+    template<typename Output>
+    static void write(Output& output, const T value)
     {
         static_assert(std::is_integral_v<T>);
         fmt::format_int str{value};
-        return std::copy_n(str.data(), str.size(), output);
+        TailBuffer tail{output};
+        tail.grow(str.size());
+        std::copy_n(str.data(), str.size(), tail.begin());
     }
 };
 
 struct FormatterFloat
 {
-    template<typename Iterator>
-    static Iterator write(Iterator output, const double value)
+    template<typename Output>
+    static void write(Output& output, const double value)
     {
-        std::array<char, erthink::d2a_max_chars> buf;
-        const auto end = erthink::d2a(value, buf.begin());
-        return std::copy(buf.begin(), end, output);
+        TailBuffer tail{output};
+        tail.grow(erthink::d2a_max_chars);
+        const auto end = erthink::d2a(value, tail.begin());
+        tail.consume(end - tail.begin());
+        tail.fit();
     }
 };
 
@@ -157,13 +250,14 @@ template<> struct Formatter<double> : FormatterFloat { };
 template<>
 struct Formatter<bool>
 {
-    template<typename Iterator>
-    static Iterator write(Iterator output, const bool value)
+    template<typename Output>
+    static void write(Output& output, const bool value)
     {
+        TailBuffer tail{output};
         if (value) {
-            return std::copy_n("true", 4, output);
+            tail.append("true");
         } else {
-            return std::copy_n("false", 5, output);
+            tail.append("false");
         }
     }
 };
@@ -171,21 +265,37 @@ struct Formatter<bool>
 template<>
 struct Formatter<std::string_view>
 {
-    template<typename Iterator>
-    static Iterator write(Iterator output, const std::string_view value)
+    template<typename Output>
+    static void write(Output& output, const std::string_view value)
     {
-        *output++ = '"';
-        for (const auto c : value) {
-            if (erthink_unlikely(detail::escape_maps.is_escaped[static_cast<uint8_t>(c)])) {
-                const auto& [replacement, len]
-                    = detail::escape_maps.char_map[static_cast<uint8_t>(c)];
-                output = std::copy_n(replacement.begin(), len, output);
-            } else {
-                *output++ = c;
+        TailBuffer tail{output};
+        // for two '"'
+        tail.grow(2);
+        tail.append_no_grow('"');
+
+        auto it = value.begin();
+        while (it != value.end()) {
+            static constexpr size_t BULK{64};
+
+            // enough room for all characters to be `\uXXXX` and a terminating '"'
+            tail.grow(std::max(BULK * 6, tail.room()) + 1);
+
+            const size_t bulk_size = std::min(BULK, static_cast<size_t>(value.end() - it));
+            for (size_t i{0}; i < bulk_size; ++i, ++it) {
+                const char c = *it;
+                if (erthink_unlikely(detail::escape_maps.is_escaped[static_cast<uint8_t>(c)])) {
+                    const auto& [replacement, len]
+                        = detail::escape_maps.char_map[static_cast<uint8_t>(c)];
+                    std::copy_n(replacement.begin(), len, tail.begin());
+                    tail.consume(len);
+                } else {
+                    tail.append_no_grow(c);
+                }
             }
         }
-        *output++ = '"';
-        return output;
+
+        tail.append_no_grow('"');
+        tail.fit();
     }
 };
 
@@ -195,68 +305,69 @@ template<> struct Formatter<std::string> : Formatter<std::string_view> { };
 template<size_t N>
 struct Formatter<char[N]>
 {
-    template<typename Iterator>
-    static Iterator write(Iterator output, const char* value)
+    template<typename Output>
+    static void write(Output& output, const char* value)
     {
         // -1 to avoid the null termination character
-        return jsonwriter::write(output, std::string_view{value, N - 1});
+        jsonwriter::write(output, std::string_view{value, N - 1});
     }
 };
 
 template<>
 struct Formatter<char>
 {
-    template<typename Iterator>
-    static Iterator write(Iterator output, const char value)
+    template<typename Output>
+    static void write(Output& output, const char value)
     {
-        *output++ = '"';
-        *output++ = value;
-        *output++ = '"';
-        return output;
+        TailBuffer tail{output};
+        tail.grow(3);
+        tail.append_no_grow('"');
+        tail.append_no_grow(value);
+        tail.append_no_grow('"');
     }
 };
 
 template<>
 struct Formatter<std::nullopt_t>
 {
-    template<typename Iterator>
-    static Iterator write(Iterator output, const std::nullopt_t)
+    template<typename Output>
+    static void write(Output& output, const std::nullopt_t)
     {
-        return std::copy_n("null", 4, output);
+        TailBuffer tail{output};
+        tail.append("null");
     }
 };
 
 template<typename T>
 struct Formatter<std::optional<T>>
 {
-    template<typename Iterator>
-    static Iterator write(Iterator output, const std::optional<T>& value)
+    template<typename Output>
+    static void write(Output& output, const std::optional<T>& value)
     {
         if (value.has_value()) {
-            return jsonwriter::write(output, *value);
+            jsonwriter::write(output, *value);
         } else {
-            return jsonwriter::write(output, std::nullopt);
+            jsonwriter::write(output, std::nullopt);
         }
     }
 };
 
 struct FormatterList
 {
-    template<typename Iterator, typename Container>
-    static Iterator write(Iterator output, const Container& container)
+    template<typename Output, typename Container>
+    static void write(Output& output, const Container& container)
     {
-        *output++ = '[';
+        TailBuffer{output}.append('[');
         auto it = container.begin();
         if (it != container.end()) {
-            output = jsonwriter::write(output, *it);
+            jsonwriter::write(output, *it);
             ++it;
         }
         for (; it != container.end(); ++it) {
-            *output++ = ',';
-            output = jsonwriter::write(output, *it);
+            TailBuffer{output}.append(',');
+            jsonwriter::write(output, *it);
         }
-        *output++ = ']';
-        return output;
+        TailBuffer{output}.append(']');
     }
 };
 
@@ -268,83 +379,80 @@ template<typename T> struct Formatter<std::forward_list<T>> : FormatterList { };
 template<typename T> struct Formatter<std::list<T>> : FormatterList { };
 
 /// A proxy to provide `object[key] = value` semantics.
-template<typename Iterator>
+template<typename Output>
 class Object
 {
 public:
-    Object(Iterator& output)
+    Object(Output& output)
         : m_output{output}
     { }
 
-    detail::WriterIterRef<Iterator> operator[](const std::string_view key)
+    detail::WriterIterRef<Output> operator[](const std::string_view key)
     {
         if (erthink_likely(m_counter > 0)) {
-            *m_output = ',';
-            ++m_output;
+            TailBuffer{m_output}.append(',');
         }
         ++m_counter;
-        m_output = Formatter<std::string_view>::write(m_output, key);
-        *m_output = ':';
-        ++m_output;
-        return detail::WriterIterRef<Iterator>{m_output};
+        Formatter<std::string_view>::write(m_output, key);
+        TailBuffer{m_output}.append(':');
+        return detail::WriterIterRef<Output>{m_output};
     }
 
 private:
-    Iterator& m_output;
+    Output& m_output;
     size_t m_counter{0};
 };
 
 namespace detail {
 
-template<typename Iterator>
-using ObjectCallback = std::function<void(Object<Iterator>&)>;
+template<typename Output>
+using ObjectCallback = std::function<void(Object<Output>&)>;
 
 } // namespace detail
 
 /// JSON serializatin without inherent memory allocations. See tests for usage.
-template<typename Iterator, typename T>
-Iterator write(Iterator output, T&& value)
+template<typename Output, typename T>
+void write(Output& output, T&& value)
 {
-    if constexpr (std::is_convertible_v<T, detail::ObjectCallback<Iterator>>) {
-        return Formatter<detail::ObjectCallback<Iterator>>::write(output, value);
+    if constexpr (std::is_convertible_v<T, detail::ObjectCallback<Output>>) {
+        Formatter<detail::ObjectCallback<Output>>::write(output, value);
     } else {
-        return Formatter<std::remove_cv_t<std::remove_reference_t<T>>>::write(
+        Formatter<std::remove_cv_t<std::remove_reference_t<T>>>::write(
             output, std::forward<T>(value));
     }
 }
 
-template<typename Iterator, typename T>
-Iterator write(Iterator output, const std::initializer_list<T> value)
+template<typename Output, typename T>
+void write(Output& output, const std::initializer_list<T> value)
 {
-    return FormatterList::write(output, value);
+    FormatterList::write(output, value);
 }
 
-template<typename Iterator>
-struct Formatter<detail::ObjectCallback<Iterator>>
+template<typename Output>
+struct Formatter<detail::ObjectCallback<Output>>
 {
     template<typename Callback>
-    static Iterator write(Iterator output, const Callback& callback)
+    static void write(Output& output, const Callback& callback)
     {
-        *output++ = '{';
-        Object<Iterator> wo{output};
+        TailBuffer{output}.append('{');
+        Object<Output> wo{output};
         callback(wo);
-        *output++ = '}';
-        return output;
+        TailBuffer{output}.append('}');
     }
 };
 
-template<typename Iterator>
+template<typename Output>
 template<typename T>
-void detail::WriterIterRef<Iterator>::operator=(T&& value)
+void detail::WriterIterRef<Output>::operator=(T&& value)
 {
-    m_output = jsonwriter::write(m_output, std::forward<T>(value));
+    jsonwriter::write(m_output, std::forward<T>(value));
 }
 
-template<typename Iterator>
+template<typename Output>
 template<typename T>
-void detail::WriterIterRef<Iterator>::operator=(const std::initializer_list<T> list)
+void detail::WriterIterRef<Output>::operator=(const std::initializer_list<T> list)
 {
-    m_output = jsonwriter::write(m_output, list);
+    jsonwriter::write(m_output, list);
 }
 
 } // namespace jsonwriter
