@@ -11,13 +11,13 @@ like `std::vector`.
 ## Benchmarks
 
 ```
-BM_jsonwriter_simple_small_struct                74.3 ns         74.3 ns      9433057
-BM_jsonwriter_large_strings                     68828 ns        68791 ns        10046
+BM_jsonwriter_simple_small_struct                74.3 ns
+BM_jsonwriter_large_strings                     68828 ns
 
-BM_rapidjson_simple_small_struct                  261 ns          261 ns      2687401
-BM_rapidjson_simple_small_struct_dump_only        182 ns          182 ns      3818769
-BM_rapidjson_large_strings                     111103 ns       111062 ns         6486
-BM_rapidjson_large_strings_dump_only            95702 ns        95670 ns         7599
+BM_rapidjson_simple_small_struct                  261 ns
+BM_rapidjson_simple_small_struct_dump_only        182 ns
+BM_rapidjson_large_strings                     111103 ns
+BM_rapidjson_large_strings_dump_only            95702 ns
 ```
 
 ## Dependencies
