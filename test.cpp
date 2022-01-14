@@ -20,6 +20,16 @@ TEST(TestJsonWriter, Char)
         jsonwriter::write(out, char{'A'});
         EXPECT_EQ(out, "\"A\"");
     }
+    {
+        std::string out{};
+        jsonwriter::write(out, char{'"'});
+        EXPECT_EQ(out, "\"\\\"\"");
+    }
+    {
+        std::string out{};
+        jsonwriter::write(out, char{'\\'});
+        EXPECT_EQ(out, "\"\\\\\"");
+    }
 }
 
 TEST(TestJsonWriter, Integers)

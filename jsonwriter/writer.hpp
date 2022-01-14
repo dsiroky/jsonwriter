@@ -319,11 +319,7 @@ struct Formatter<char>
     template<typename Output>
     static void write(Output& output, const char value)
     {
-        TailBuffer tail{output};
-        tail.grow(3);
-        tail.append_no_grow('"');
-        tail.append_no_grow(value);
-        tail.append_no_grow('"');
+        jsonwriter::write(output, std::string_view{&value, 1});
     }
 };
 
