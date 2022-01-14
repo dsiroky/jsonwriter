@@ -278,7 +278,7 @@ struct Formatter<std::string_view>
             static constexpr size_t BULK{64};
 
             // enough room for all characters to be `\uXXXX` and a terminating '"'
-            tail.grow(std::max(BULK * 6, tail.room()) + 1);
+            tail.grow(std::max(BULK * 6 + 1, tail.room()));
 
             const size_t bulk_size = std::min(BULK, static_cast<size_t>(value.end() - it));
             for (size_t i{0}; i < bulk_size; ++i, ++it) {
