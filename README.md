@@ -1,23 +1,28 @@
 # Fast JSON writer/serializer
 
-* Small, header only.
+* Fast. Really fast.
+* Small, single header only. `#include <jsonwriter/writer.hpp>`
 * No inherent memory allocations.
 * No intermediate values storage.
 
-Unlike generic libraries like https://github.com/nlohmann/json this library
-provides **only serialization**. The output buffer must have a contiguous storage,
-like `std::vector`.
+Unlike generic libraries like [nlohmann](https://github.com/nlohmann/json) or
+[RapidJSON](https://rapidjson.org/) this library provides **only
+serialization**.
 
 ## Benchmarks
 
-```
-BM_jsonwriter_simple_small_struct                74.3 ns
-BM_jsonwriter_large_strings                     68828 ns
+gcc 11, -O3, Intel Core i7-8700K
 
-BM_rapidjson_simple_small_struct                  261 ns
-BM_rapidjson_simple_small_struct_dump_only        182 ns
-BM_rapidjson_large_strings                     111103 ns
-BM_rapidjson_large_strings_dump_only            95702 ns
+```
+BM_jsonwriter_simple_small_struct                52.7 ns
+BM_jsonwriter_simple_small_struct_list         102461 ns
+BM_jsonwriter_large_strings                     65423 ns
+
+BM_rapidjson_simple_small_struct                  246 ns
+BM_rapidjson_simple_small_struct_dump_only        197 ns
+BM_rapidjson_simple_small_struct_list          217037 ns
+BM_rapidjson_large_strings                     152939 ns
+BM_rapidjson_large_strings_dump_only           142851 ns
 ```
 
 ## Dependencies

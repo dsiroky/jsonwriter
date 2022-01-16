@@ -19,8 +19,8 @@ struct SmallStruct {};
 namespace jsonwriter {
 template<>
 struct Formatter<SmallStruct> {
-    template<typename Output>
-    static void write(Output& output, const SmallStruct)
+    __attribute__((always_inline)) inline
+    static void write(jsonwriter::Buffer& output, const SmallStruct)
     {
         jsonwriter::write(output, [](auto& object) {
             object["k1"] = "cd";
@@ -41,11 +41,11 @@ namespace {
 
 void BM_jsonwriter_simple_small_struct(benchmark::State& state)
 {
-    auto out = fmt::memory_buffer();
+    jsonwriter::Buffer out{};
 
     for (auto _ : state) {
         jsonwriter::write(out, SmallStruct{});
-        benchmark::DoNotOptimize(out.data());
+        benchmark::DoNotOptimize(out.begin());
         benchmark::ClobberMemory();
         out.clear();
     }
@@ -54,12 +54,12 @@ BENCHMARK(BM_jsonwriter_simple_small_struct);
 
 void BM_jsonwriter_simple_small_struct_list(benchmark::State& state)
 {
-    auto out = fmt::memory_buffer();
+    jsonwriter::Buffer out{};
     std::vector<SmallStruct> vec{1000};
 
     for (auto _ : state) {
         jsonwriter::write(out, vec);
-        benchmark::DoNotOptimize(out.data());
+        benchmark::DoNotOptimize(out.begin());
         benchmark::ClobberMemory();
         out.clear();
     }
@@ -68,12 +68,12 @@ BENCHMARK(BM_jsonwriter_simple_small_struct_list);
 
 void BM_jsonwriter_large_strings(benchmark::State& state)
 {
-    auto out = fmt::memory_buffer();
+    jsonwriter::Buffer out{};
     out.reserve(large_string_list.size() * large_string_list[0].size() * 2);
 
     for (auto _ : state) {
         jsonwriter::write(out, large_string_list);
-        benchmark::DoNotOptimize(out.data());
+        benchmark::DoNotOptimize(out.begin());
         benchmark::ClobberMemory();
         out.clear();
     }
@@ -82,12 +82,12 @@ BENCHMARK(BM_jsonwriter_large_strings);
 
 void BM_jsonwriter_large_list_of_ints(benchmark::State& state)
 {
-    auto out = fmt::memory_buffer();
+    jsonwriter::Buffer out{};
     out.reserve(large_int_list.size() * 10);
 
     for (auto _ : state) {
         jsonwriter::write(out, large_int_list);
-        benchmark::DoNotOptimize(out.data());
+        benchmark::DoNotOptimize(out.begin());
         benchmark::ClobberMemory();
         out.clear();
     }
@@ -96,12 +96,12 @@ BENCHMARK(BM_jsonwriter_large_list_of_ints);
 
 void BM_jsonwriter_large_list_of_bools(benchmark::State& state)
 {
-    auto out = fmt::memory_buffer();
+    jsonwriter::Buffer out{};
     out.reserve(large_bool_list.size() * 10);
 
     for (auto _ : state) {
         jsonwriter::write(out, large_bool_list);
-        benchmark::DoNotOptimize(out.data());
+        benchmark::DoNotOptimize(out.begin());
         benchmark::ClobberMemory();
     }
 }

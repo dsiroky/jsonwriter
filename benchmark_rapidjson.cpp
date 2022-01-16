@@ -73,6 +73,42 @@ void BM_rapidjson_simple_small_struct_dump_only(benchmark::State& state)
 }
 BENCHMARK(BM_rapidjson_simple_small_struct_dump_only);
 
+void BM_rapidjson_simple_small_struct_list(benchmark::State& state)
+{
+    namespace rj = rapidjson;
+
+    for (auto _ : state) {
+        rj::Document d{};
+        d.SetArray();
+        for (int i{0}; i < 1000; ++i) {
+            rj::Value item{rj::kObjectType};
+            item.AddMember("k1", "cd", d.GetAllocator());
+            rj::Value o2{rj::kObjectType};
+            {
+                rj::Value a{rj::kArrayType};
+                a.PushBack(1, d.GetAllocator());
+                a.PushBack(2, d.GetAllocator());
+                a.PushBack(999999999, d.GetAllocator());
+                o2.AddMember("o1", a, d.GetAllocator());
+                o2.AddMember("o2", false, d.GetAllocator());
+                o2.AddMember("o\r3", "i\no", d.GetAllocator());
+                o2.AddMember("o4", 'c', d.GetAllocator());
+            }
+            item.AddMember("k2", o2.Move(), d.GetAllocator());
+            item.AddMember("k3", false, d.GetAllocator());
+            item.AddMember("k4", 234.345678, d.GetAllocator());
+            d.PushBack(item, d.GetAllocator());
+        }
+        rj::StringBuffer buffer;
+        rj::Writer<rj::StringBuffer> writer(buffer);
+        d.Accept(writer);
+
+        benchmark::DoNotOptimize(buffer.GetString());
+        benchmark::ClobberMemory();
+    }
+}
+BENCHMARK(BM_rapidjson_simple_small_struct_list);
+
 void BM_rapidjson_large_strings(benchmark::State& state)
 {
     namespace rj = rapidjson;

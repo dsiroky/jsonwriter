@@ -4,6 +4,7 @@
 
 #include <algorithm>
 #include <array>
+#include <cstring>
 #include <deque>
 #include <forward_list>
 #include <initializer_list>
@@ -27,68 +28,82 @@
 
 namespace jsonwriter {
 
-/// Convenience wrapper for simpler/faster appending to a container.
-template<typename Container>
-class TailBuffer
+/// Optimized buffer for serialization. Writing to the reserved space is valid
+/// if consume() is called afterwards before calling make_room() or reserve().
+/// The buffer is not copyable to avoid unwanted copies.
+class Buffer
 {
 public:
-    static_assert(std::is_same_v<decltype(*std::declval<Container>().begin()), char&>,
-                  "container's dereferenced begin() must reference to char");
-    static_assert(std::is_same_v<decltype(*std::declval<Container>().end()), char&>,
-                  "container's dereferenced end() must reference to char");
+    explicit Buffer() { assert(size() + room() == capacity()); }
 
-    TailBuffer(Container& container)
-        : m_container{container}
-        , m_start{&*container.end()}
-    { }
+    Buffer(const Buffer& other) = delete;
+    Buffer& operator=(const Buffer& other) = delete;
 
-    TailBuffer(const TailBuffer&) = delete;
-    TailBuffer& operator=(const TailBuffer&) = delete;
-    TailBuffer(TailBuffer&&) = delete;
-    TailBuffer& operator=(TailBuffer&&) = delete;
+    Buffer(Buffer&& other) { move_from(std::move(other)); }
+    Buffer& operator=(Buffer&& other) { move_from(std::move(other)); return *this; }
 
-    /// Grow room by diff amount.
-    void grow(const size_t diff)
+    char* begin() noexcept { return m_ptr.get(); }
+    char* end() noexcept { return m_working_end; }
+    const char* data() const noexcept { return begin(); }
+    const char* end() const noexcept { return m_working_end; }
+
+    char* data() noexcept { return begin(); }
+    const char* begin() const noexcept { return m_ptr.get(); }
+
+    // Use this pointer for appending data to the reserved space.
+    char* working_end() noexcept { return m_working_end; }
+
+    size_t size() const noexcept { return static_cast<size_t>(end() - begin()); }
+    size_t capacity() const noexcept { return m_capacity; }
+    size_t room() const noexcept { return m_capacity - size(); }
+
+    void reserve(const size_t count)
     {
-        resize(m_container.size() + diff);
+        assert(m_ptr != nullptr);
+        if (erthink_unlikely(count > m_capacity)) {
+            const auto old_size = size();
+            const auto new_capacity = std::max(count, m_capacity + m_capacity / 2);
+            auto new_ptr = allocate(new_capacity);
+            ::memcpy(new_ptr.get(), m_ptr.get(), old_size);
+            m_ptr = std::move(new_ptr);
+            m_working_end = begin() + old_size;
+            m_capacity = new_capacity;
+        }
+        assert(capacity() >= count);
+        assert(size() + room() == capacity());
     }
 
-    /// Shift the beginning by diff. Room is reduced by diff.
-    void consume(const size_t diff)
+    void clear() noexcept { m_working_end = begin(); }
+
+    /// Make room for at least "count" characters.
+    void make_room(const size_t count) { reserve(size() + count); }
+
+    /// Shift the working end by diff. Room is reduced by diff.
+    void consume(const size_t diff) noexcept
     {
-        assert(m_start != nullptr);
         assert(room() >= diff);
-        m_start += diff;
+        m_working_end += diff;
     }
 
-    /// Fit the container size to the current consumed space.
-    void fit() { resize(m_start - &*(m_container.begin())); }
-
-    /// How much chars can fit without growing.
-    size_t room() const { return end() - begin(); }
-
-    char* begin() const
+    void consume(char* const new_working_end) noexcept
     {
-        assert(m_start != nullptr);
-        return m_start;
+        assert(new_working_end >= m_working_end);
+        assert(new_working_end <= begin() + m_capacity);
+        m_working_end = new_working_end;
     }
-
-    char* end() const { return &*(m_container.end()); }
 
     /// Adds the character and consumes 1.
-    void append_no_grow(const char c)
+    void append_no_grow(const char c) noexcept
     {
-        assert(m_start != nullptr);
-        assert(room() > 0);
-        *m_start = c;
+        *m_working_end = c;
         consume(1);
     }
 
     /// Grows by 1, adds the character and consumes 1.
     void append(const char c)
     {
-        grow(1);
-        *m_start = c;
+        make_room(1);
+        *m_working_end = c;
         consume(1);
     }
 
@@ -97,45 +112,64 @@ public:
     void append(const char (&c)[N])
     {
         // exclude null termination
-        grow(N - 1);
-        std::copy_n(c, N - 1, begin());
-        consume(N - 1);
+        make_room(N - 1);
+        consume(std::copy_n(c, N - 1, m_working_end));
     }
 
 private:
-    void resize(const size_t count)
-    {
-        assert(m_start != nullptr);
-        const auto old_offset = m_start - &*(m_container.begin());
-        m_container.resize(count);
-        m_start = &*(m_container.begin()) + old_offset;
+    using holder_t = std::unique_ptr<char[]>;
+
+    void move_from(Buffer&& other) {
+        if (&other != this) {
+            const auto old_size = other.size();
+            m_ptr = std::move(other.m_ptr);
+            m_working_end = begin() + old_size;
+            m_capacity = other.m_capacity;
+
+            other.~Buffer();
+            new (&other) Buffer{};
+        }
     }
 
-    Container& m_container;
-    char* m_start{nullptr};
+    holder_t allocate(const size_t count)
+    {
+        return holder_t{new (std::align_val_t{64}) char[count]};
+    }
+
+    static constexpr size_t INITIAL_CAPACITY{512};
+
+    holder_t m_ptr{allocate(INITIAL_CAPACITY)};
+    char* m_working_end{m_ptr.get()};
+    size_t m_capacity{INITIAL_CAPACITY};
 };
 
-template<typename Output, typename T>
-void write(Output& output, T&& value);
+template<typename T>
+void write(Buffer& buffer, T&& value);
 
 namespace detail {
 
-template<typename Output>
+template<typename Buffer>
 class WriterIterRef
 {
 public:
-    WriterIterRef(Output& output)
-        : m_output{output}
+    WriterIterRef(Buffer& buffer)
+        : m_buffer{buffer}
     { }
 
     template<typename T>
-    void operator=(T&& value);
+    void operator=(T&& value)
+    {
+        jsonwriter::write(m_buffer, std::forward<T>(value));
+    }
 
     template<typename T>
-    void operator=(const std::initializer_list<T> list);
+    void operator=(const std::initializer_list<T> list)
+    {
+        jsonwriter::write(m_buffer, list);
+    }
 
 private:
-    Output& m_output;
+    Buffer& m_buffer;
 };
 
 /// character -> output sequence
@@ -206,7 +240,7 @@ static constexpr EscapeMaps escape_maps{};
 
 } // namespace detail
 
-template<typename Output>
+template<typename Buffer>
 class Object;
 
 /// Similar to fmt::formatter. Specialize the template for custom types.
@@ -220,27 +254,21 @@ struct Formatter
 template<typename T>
 struct Formatter<T, typename std::enable_if_t<std::is_integral_v<T>>>
 {
-    template<typename Output>
-    static void write(Output& output, const T value)
+    static void write(Buffer& buffer, const T value)
     {
         static_assert(std::is_integral_v<T>);
         fmt::format_int str{value};
-        TailBuffer tail{output};
-        tail.grow(str.size());
-        std::copy_n(str.data(), str.size(), tail.begin());
+        buffer.make_room(str.size());
+        buffer.consume(std::copy_n(str.data(), str.size(), buffer.working_end()));
     }
 };
 
 struct FormatterFloat
 {
-    template<typename Output>
-    static void write(Output& output, const double value)
+    static void write(Buffer& buffer, const double value)
     {
-        TailBuffer tail{output};
-        tail.grow(erthink::d2a_max_chars);
-        const auto end = erthink::d2a(value, tail.begin());
-        tail.consume(end - tail.begin());
-        tail.fit();
+        buffer.make_room(erthink::d2a_max_chars);
+        buffer.consume(erthink::d2a(value, buffer.working_end()));
     }
 };
 
@@ -250,14 +278,12 @@ template<> struct Formatter<double> : FormatterFloat { };
 template<>
 struct Formatter<bool>
 {
-    template<typename Output>
-    static void write(Output& output, const bool value)
+    static void write(Buffer& buffer, const bool value)
     {
-        TailBuffer tail{output};
         if (value) {
-            tail.append("true");
+            buffer.append("true");
         } else {
-            tail.append("false");
+            buffer.append("false");
         }
     }
 };
@@ -265,20 +291,18 @@ struct Formatter<bool>
 template<>
 struct Formatter<std::string_view>
 {
-    template<typename Output>
-    static void write(Output& output, const std::string_view value)
+    static void write(Buffer& buffer, const std::string_view value)
     {
-        TailBuffer tail{output};
         // for two '"'
-        tail.grow(2);
-        tail.append_no_grow('"');
+        buffer.make_room(2);
+        buffer.append_no_grow('"');
 
         auto it = value.begin();
         while (it != value.end()) {
             static constexpr size_t BULK{64};
 
             // enough room for all characters to be `\uXXXX` and a terminating '"'
-            tail.grow(std::max(BULK * 6 + 1, tail.room()));
+            buffer.make_room(std::max(BULK * 6 + 1, buffer.room()));
 
             const size_t bulk_size = std::min(BULK, static_cast<size_t>(value.end() - it));
             for (size_t i{0}; i < bulk_size; ++i, ++it) {
@@ -286,16 +310,14 @@ struct Formatter<std::string_view>
                 if (erthink_unlikely(detail::escape_maps.is_escaped[static_cast<uint8_t>(c)])) {
                     const auto& [replacement, len]
                         = detail::escape_maps.char_map[static_cast<uint8_t>(c)];
-                    std::copy_n(replacement.begin(), len, tail.begin());
-                    tail.consume(len);
+                    buffer.consume(std::copy_n(replacement.begin(), len, buffer.working_end()));
                 } else {
-                    tail.append_no_grow(c);
+                    buffer.append_no_grow(c);
                 }
             }
         }
 
-        tail.append_no_grow('"');
-        tail.fit();
+        buffer.append_no_grow('"');
     }
 };
 
@@ -305,65 +327,60 @@ template<> struct Formatter<std::string> : Formatter<std::string_view> { };
 template<size_t N>
 struct Formatter<char[N]>
 {
-    template<typename Output>
-    static void write(Output& output, const char* value)
+    static void write(Buffer& buffer, const char* value)
     {
         // -1 to avoid the null termination character
-        jsonwriter::write(output, std::string_view{value, N - 1});
+        jsonwriter::write(buffer, std::string_view{value, N - 1});
     }
 };
 
 template<>
 struct Formatter<char>
 {
-    template<typename Output>
-    static void write(Output& output, const char value)
+    static void write(Buffer& buffer, const char value)
     {
-        jsonwriter::write(output, std::string_view{&value, 1});
+        jsonwriter::write(buffer, std::string_view{&value, 1});
     }
 };
 
 template<>
 struct Formatter<std::nullopt_t>
 {
-    template<typename Output>
-    static void write(Output& output, const std::nullopt_t)
+    static void write(Buffer& buffer, const std::nullopt_t)
     {
-        TailBuffer tail{output};
-        tail.append("null");
+        buffer.append("null");
     }
 };
 
 template<typename T>
 struct Formatter<std::optional<T>>
 {
-    template<typename Output>
-    static void write(Output& output, const std::optional<T>& value)
+    static void write(Buffer& buffer, const std::optional<T>& value)
     {
         if (value.has_value()) {
-            jsonwriter::write(output, *value);
+            jsonwriter::write(buffer, *value);
         } else {
-            jsonwriter::write(output, std::nullopt);
+            jsonwriter::write(buffer, std::nullopt);
         }
     }
 };
 
 struct FormatterList
 {
-    template<typename Output, typename Container>
-    static void write(Output& output, const Container& container)
+    template<typename Container>
+    static void write(Buffer& buffer, const Container& container)
     {
-        TailBuffer{output}.append('[');
+        buffer.append('[');
         auto it = container.begin();
         if (it != container.end()) {
-            jsonwriter::write(output, *it);
+            jsonwriter::write(buffer, *it);
             ++it;
         }
         for (; it != container.end(); ++it) {
-            TailBuffer{output}.append(',');
-            jsonwriter::write(output, *it);
+            buffer.append(',');
+            jsonwriter::write(buffer, *it);
         }
-        TailBuffer{output}.append(']');
+        buffer.append(']');
     }
 };
 
@@ -375,80 +392,66 @@ template<typename T> struct Formatter<std::forward_list<T>> : FormatterList { };
 template<typename T> struct Formatter<std::list<T>> : FormatterList { };
 
 /// A proxy to provide `object[key] = value` semantics.
-template<typename Output>
+template<typename Buffer>
 class Object
 {
 public:
-    Object(Output& output)
-        : m_output{output}
+    Object(Buffer& buffer)
+        : m_buffer{buffer}
     { }
 
-    detail::WriterIterRef<Output> operator[](const std::string_view key)
+    detail::WriterIterRef<Buffer> operator[](const std::string_view key)
     {
         if (erthink_likely(m_counter > 0)) {
-            TailBuffer{m_output}.append(',');
+            m_buffer.append(',');
         }
         ++m_counter;
-        Formatter<std::string_view>::write(m_output, key);
-        TailBuffer{m_output}.append(':');
-        return detail::WriterIterRef<Output>{m_output};
+        Formatter<std::string_view>::write(m_buffer, key);
+        m_buffer.append(':');
+        return detail::WriterIterRef<Buffer>{m_buffer};
     }
 
 private:
-    Output& m_output;
+    Buffer& m_buffer;
     size_t m_counter{0};
 };
 
 namespace detail {
 
-template<typename Output>
-using ObjectCallback = std::function<void(Object<Output>&)>;
+template<typename Buffer>
+using ObjectCallback = std::function<void(Object<Buffer>&)>;
 
 } // namespace detail
 
-/// JSON serializatin without inherent memory allocations. See tests for usage.
-template<typename Output, typename T>
-void write(Output& output, T&& value)
-{
-    if constexpr (std::is_convertible_v<T, detail::ObjectCallback<Output>>) {
-        Formatter<detail::ObjectCallback<Output>>::write(output, value);
-    } else {
-        Formatter<std::remove_cv_t<std::remove_reference_t<T>>>::write(
-            output, std::forward<T>(value));
-    }
-}
-
-template<typename Output, typename T>
-void write(Output& output, const std::initializer_list<T> value)
-{
-    FormatterList::write(output, value);
-}
-
-template<typename Output>
-struct Formatter<detail::ObjectCallback<Output>>
+template<>
+struct Formatter<detail::ObjectCallback<Buffer>>
 {
     template<typename Callback>
-    static void write(Output& output, const Callback& callback)
+    static void write(Buffer& buffer, const Callback& callback)
     {
-        TailBuffer{output}.append('{');
-        Object<Output> wo{output};
+        buffer.append('{');
+        Object<Buffer> wo{buffer};
         callback(wo);
-        TailBuffer{output}.append('}');
+        buffer.append('}');
     }
 };
 
-template<typename Output>
+/// JSON serializatin without inherent memory allocations. See tests for usage.
 template<typename T>
-void detail::WriterIterRef<Output>::operator=(T&& value)
+void write(Buffer& buffer, T&& value)
 {
-    jsonwriter::write(m_output, std::forward<T>(value));
+    if constexpr (std::is_convertible_v<T, detail::ObjectCallback<Buffer>>) {
+        Formatter<detail::ObjectCallback<Buffer>>::write(buffer, value);
+    } else {
+        Formatter<std::remove_cv_t<std::remove_reference_t<T>>>::write(
+            buffer, std::forward<T>(value));
+    }
 }
 
-template<typename Output>
 template<typename T>
-void detail::WriterIterRef<Output>::operator=(const std::initializer_list<T> list)
+void write(Buffer& buffer, const std::initializer_list<T> value)
 {
-    jsonwriter::write(m_output, list);
+    FormatterList::write(buffer, value);
 }
 
 } // namespace jsonwriter
