@@ -309,6 +309,20 @@ TEST(TestJsonWriter, ListLikeContainers)
     }
 }
 
+TEST(TestJsonWriter, DynamicList)
+{
+    {
+        jsonwriter::Buffer out{};
+        jsonwriter::write(out, jsonwriter::DynamicList([](auto& list){
+            list.push_back(33);
+            list.push_back("abc");
+            list.push_back(true);
+            list.push_back({1, 2, 3});
+        }));
+        EXPECT_EQ(to_str(out), "[33,\"abc\",true,[1,2,3]]");
+    }
+}
+
 TEST(TestJsonWriter, Objects)
 {
     {

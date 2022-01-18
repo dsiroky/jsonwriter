@@ -365,6 +365,67 @@ struct Formatter<std::optional<T>>
     }
 };
 
+template<typename Callback>
+class DynamicList
+{
+public:
+    DynamicList(const Callback& callback)
+        : m_callback{callback}
+    { }
+
+private:
+    const Callback& m_callback;
+
+    friend struct Formatter<DynamicList<Callback>>;
+};
+
+template<typename Callback>
+struct Formatter<DynamicList<Callback>>
+{
+private:
+    class ListProxy
+    {
+    public:
+        ListProxy(Buffer& buffer)
+            : m_buffer{buffer}
+        { }
+
+        ListProxy(const ListProxy&) = delete;
+        ListProxy& operator=(const ListProxy&) = delete;
+        ListProxy(ListProxy&&) = delete;
+        ListProxy& operator=(ListProxy&&) = delete;
+
+        template<typename T>
+        void push_back(const T& value) { push_back_impl(value); }
+
+        template<typename T>
+        void push_back(const std::initializer_list<T> value) { push_back_impl(value); }
+
+    private:
+        template<typename T>
+        void push_back_impl(const T& value)
+        {
+            if (erthink_likely(m_counter > 0)) {
+                m_buffer.append(',');
+            }
+            jsonwriter::write(m_buffer, value);
+            ++m_counter;
+        }
+
+        Buffer& m_buffer;
+        size_t m_counter{0};
+    };
+
+public:
+    static void write(Buffer& buffer, const DynamicList<Callback>& value)
+    {
+        buffer.append('[');
+        ListProxy proxy{buffer};
+        value.m_callback(proxy);
+        buffer.append(']');
+    }
+};
+
 struct FormatterList
 {
     template<typename Container>
