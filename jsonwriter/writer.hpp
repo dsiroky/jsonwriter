@@ -28,6 +28,22 @@
 
 namespace jsonwriter {
 
+namespace detail {
+
+class NoCopyMove
+{
+public:
+    NoCopyMove() = default;
+
+private:
+    NoCopyMove(const NoCopyMove&) = delete;
+    NoCopyMove& operator=(const NoCopyMove&) = delete;
+    NoCopyMove(NoCopyMove&&) = delete;
+    NoCopyMove& operator=(NoCopyMove&&) = delete;
+};
+
+} // namespace detail
+
 /// Optimized buffer for serialization. Writing to the reserved space is valid
 /// if consume() is called afterwards before calling make_room() or reserve().
 /// The buffer is not copyable to avoid unwanted copies.
@@ -148,30 +164,6 @@ void write(Buffer& buffer, T&& value);
 
 namespace detail {
 
-template<typename Buffer>
-class WriterIterRef
-{
-public:
-    WriterIterRef(Buffer& buffer)
-        : m_buffer{buffer}
-    { }
-
-    template<typename T>
-    void operator=(T&& value)
-    {
-        jsonwriter::write(m_buffer, std::forward<T>(value));
-    }
-
-    template<typename T>
-    void operator=(const std::initializer_list<T> list)
-    {
-        jsonwriter::write(m_buffer, list);
-    }
-
-private:
-    Buffer& m_buffer;
-};
-
 /// character -> output sequence
 struct EscapeMaps
 {
@@ -239,9 +231,6 @@ struct EscapeMaps
 static constexpr EscapeMaps escape_maps{};
 
 } // namespace detail
-
-template<typename Buffer>
-class Object;
 
 /// Similar to fmt::formatter. Specialize the template for custom types.
 /// T2 template parameter is for custom use, e.g. a conditional specialization.
@@ -366,34 +355,29 @@ struct Formatter<std::optional<T>>
 };
 
 template<typename Callback>
-class DynamicList
+class List
 {
 public:
-    DynamicList(const Callback& callback)
+    List(const Callback& callback)
         : m_callback{callback}
     { }
 
 private:
     const Callback& m_callback;
 
-    friend struct Formatter<DynamicList<Callback>>;
+    friend struct Formatter<List<Callback>>;
 };
 
 template<typename Callback>
-struct Formatter<DynamicList<Callback>>
+struct Formatter<List<Callback>>
 {
 private:
-    class ListProxy
+    class ListProxy : private detail::NoCopyMove
     {
     public:
         ListProxy(Buffer& buffer)
             : m_buffer{buffer}
         { }
-
-        ListProxy(const ListProxy&) = delete;
-        ListProxy& operator=(const ListProxy&) = delete;
-        ListProxy(ListProxy&&) = delete;
-        ListProxy& operator=(ListProxy&&) = delete;
 
         template<typename T>
         void push_back(const T& value) { push_back_impl(value); }
@@ -417,7 +401,7 @@ private:
     };
 
 public:
-    static void write(Buffer& buffer, const DynamicList<Callback>& value)
+    static void write(Buffer& buffer, const List<Callback>& value)
     {
         buffer.append('[');
         ListProxy proxy{buffer};
@@ -452,47 +436,77 @@ template<typename T> struct Formatter<std::deque<T>> : FormatterList { };
 template<typename T> struct Formatter<std::forward_list<T>> : FormatterList { };
 template<typename T> struct Formatter<std::list<T>> : FormatterList { };
 
-/// A proxy to provide `object[key] = value` semantics.
-template<typename Buffer>
+template<typename Callback>
 class Object
 {
 public:
-    Object(Buffer& buffer)
-        : m_buffer{buffer}
+    Object(const Callback& callback)
+        : m_callback{callback}
     { }
 
-    detail::WriterIterRef<Buffer> operator[](const std::string_view key)
-    {
-        if (erthink_likely(m_counter > 0)) {
-            m_buffer.append(',');
-        }
-        ++m_counter;
-        Formatter<std::string_view>::write(m_buffer, key);
-        m_buffer.append(':');
-        return detail::WriterIterRef<Buffer>{m_buffer};
-    }
-
 private:
-    Buffer& m_buffer;
-    size_t m_counter{0};
+    const Callback& m_callback;
+
+    friend struct Formatter<Object<Callback>>;
 };
 
-namespace detail {
-
-template<typename Buffer>
-using ObjectCallback = std::function<void(Object<Buffer>&)>;
-
-} // namespace detail
-
-template<>
-struct Formatter<detail::ObjectCallback<Buffer>>
+template<typename Callback>
+struct Formatter<Object<Callback>>
 {
-    template<typename Callback>
-    static void write(Buffer& buffer, const Callback& callback)
+private:
+    class AssignmentProxy : private detail::NoCopyMove
+    {
+    public:
+        AssignmentProxy(Buffer& buffer)
+            : m_buffer{buffer}
+        { }
+
+        template<typename T>
+        void operator=(T&& value)
+        {
+            jsonwriter::write(m_buffer, std::forward<T>(value));
+        }
+
+        template<typename T>
+        void operator=(const std::initializer_list<T> list)
+        {
+            jsonwriter::write(m_buffer, list);
+        }
+
+    private:
+        Buffer& m_buffer;
+    };
+
+    /// A proxy to provide `object[key] = value` semantics.
+    class ObjectProxy : private detail::NoCopyMove
+    {
+    public:
+        ObjectProxy(Buffer& buffer)
+            : m_buffer{buffer}
+        { }
+
+        AssignmentProxy operator[](const std::string_view key)
+        {
+            if (erthink_likely(m_counter > 0)) {
+                m_buffer.append(',');
+            }
+            ++m_counter;
+            Formatter<std::string_view>::write(m_buffer, key);
+            m_buffer.append(':');
+            return AssignmentProxy{m_buffer};
+        }
+
+    private:
+        Buffer& m_buffer;
+        size_t m_counter{0};
+    };
+
+public:
+    static void write(Buffer& buffer, const Object<Callback>& value)
     {
         buffer.append('{');
-        Object<Buffer> wo{buffer};
-        callback(wo);
+        ObjectProxy proxy{buffer};
+        value.m_callback(proxy);
         buffer.append('}');
     }
 };
@@ -501,12 +515,7 @@ struct Formatter<detail::ObjectCallback<Buffer>>
 template<typename T>
 void write(Buffer& buffer, T&& value)
 {
-    if constexpr (std::is_convertible_v<T, detail::ObjectCallback<Buffer>>) {
-        Formatter<detail::ObjectCallback<Buffer>>::write(buffer, value);
-    } else {
-        Formatter<std::remove_cv_t<std::remove_reference_t<T>>>::write(
-            buffer, std::forward<T>(value));
-    }
+    Formatter<std::remove_cv_t<std::remove_reference_t<T>>>::write(buffer, std::forward<T>(value));
 }
 
 template<typename T>

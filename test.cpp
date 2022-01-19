@@ -309,11 +309,11 @@ TEST(TestJsonWriter, ListLikeContainers)
     }
 }
 
-TEST(TestJsonWriter, DynamicList)
+TEST(TestJsonWriter, List)
 {
     {
         jsonwriter::Buffer out{};
-        jsonwriter::write(out, jsonwriter::DynamicList([](auto& list){
+        jsonwriter::write(out, jsonwriter::List([](auto& list){
             list.push_back(33);
             list.push_back("abc");
             list.push_back(true);
@@ -330,28 +330,28 @@ TEST(TestJsonWriter, Objects)
         jsonwriter::Buffer out{};
         jsonwriter::write(
             out,
-            [some_value](auto& object) {
+            jsonwriter::Object{[some_value](auto& object) {
                 object["k1"] = "c\tdžř漢語";
                 object["k\n2"] = {3, 5, 6};
                 object["k3"] = 87;
                 object["k4"] = {"\\"};
                 object["k5"] = some_value;
                 object["k6"] = 3.5;
-            });
+            }});
         EXPECT_EQ(to_str(out), "{\"k1\":\"c\\tdžř漢語\",\"k\\n2\":[3,5,6],\"k3\":87,\"k4\":["
                                "\"\\\\\"],\"k5\":42,\"k6\":35e-1}");
     }
     {
         jsonwriter::Buffer out{};
-        jsonwriter::write(out, [](auto& object) {
+        jsonwriter::write(out, jsonwriter::Object{[](auto& object) {
             object["k1"] = "cd";
-            object["k2"] = [](auto& nested_object) {
+            object["k2"] = jsonwriter::Object{[](auto& nested_object) {
                 nested_object["o1"] = {1, 2};
                 nested_object["o2"] = false;
                 nested_object["o\r3"] = "i\no";
-            };
+            }};
             object["k3"] = false;
-        });
+        }});
         EXPECT_EQ(to_str(out), "{\"k1\":\"cd\",\"k2\":{\"o1\":[1,2],\"o2\":false,\"o\\r3\":"
                        "\"i\\no\"},\"k3\":false}");
     }
@@ -399,7 +399,8 @@ struct jsonwriter::Formatter<SomeStruct>
     template<typename Output>
     static void write(Output& output, const SomeStruct& value)
     {
-        jsonwriter::write(output, [&value](auto& object) { object["a"] = value.a; });
+        jsonwriter::write(output,
+                          jsonwriter::Object{[&value](auto& object) { object["a"] = value.a; }});
     }
 };
 

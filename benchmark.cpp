@@ -24,17 +24,17 @@ struct Formatter<SmallStaticStruct> {
     __attribute__((always_inline)) inline
     static void write(jsonwriter::Buffer& output, const SmallStaticStruct)
     {
-        jsonwriter::write(output, [](auto& object) {
+        jsonwriter::write(output, jsonwriter::Object{[](auto& object) {
             object["k1"] = "cd";
-            object["k2"] = [](auto& nested_object) {
+            object["k2"] = jsonwriter::Object{[](auto& nested_object) {
                 nested_object["o1"] = {1, 2, 999999999};
                 nested_object["o2"] = false;
                 nested_object["o\r3"] = "i\no";
                 nested_object["o4"] = 'c';
-            };
+            }};
             object["k3"] = false;
             object["k4"] = 234.345678;
-        });
+        }});
     }
 };
 
@@ -42,17 +42,17 @@ template<>
 struct Formatter<SmallStruct> {
     static void write(jsonwriter::Buffer& output, const SmallStruct)
     {
-        jsonwriter::write(output, [](auto& object) {
+        jsonwriter::write(output, jsonwriter::Object{[](auto& object) {
             object[random_strings[0]] = random_strings[1];
-            object[random_strings[2]] = [](auto& nested_object) {
+            object[random_strings[2]] = jsonwriter::Object{[](auto& nested_object) {
                 nested_object[random_strings[3]] = {1, 2, 999999999};
                 nested_object[random_strings[4]] = false;
                 nested_object[random_strings[5]] = random_strings[6];
                 nested_object[random_strings[7]] = 'c';
-            };
+            }};
             object[random_strings[8]] = false;
             object[random_strings[9]] = 234.345678;
-        });
+        }});
     }
 };
 
@@ -93,7 +93,7 @@ void BM_jsonwriter_simple_small_static_struct_dynamic_list(benchmark::State& sta
     std::vector<SmallStaticStruct> vec{1000};
 
     for (auto _ : state) {
-        jsonwriter::write(out, jsonwriter::DynamicList([&vec](auto& list) {
+        jsonwriter::write(out, jsonwriter::List([&vec](auto& list) {
                               for (const auto& item : vec) {
                                   list.push_back(item);
                               }
