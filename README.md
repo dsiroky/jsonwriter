@@ -1,3 +1,5 @@
+[![jsonwriter](https://circleci.com/gh/dsiroky/jsonwriter/tree/main.svg?style=shield)](https://circleci.com/gh/dsiroky/jsonwriter/?branch=main)
+
 # Fast JSON writer/serializer
 
 * Fast. Really fast.
