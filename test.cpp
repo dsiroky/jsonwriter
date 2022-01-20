@@ -331,14 +331,15 @@ TEST(TestJsonWriter, Objects)
         jsonwriter::write(
             out,
             [some_value](auto& object) {
-                object["k1"] = "c\td";
+                object["k1"] = "c\tdžř漢語";
                 object["k\n2"] = {3, 5, 6};
                 object["k3"] = 87;
                 object["k4"] = {"\\"};
                 object["k5"] = some_value;
+                object["k6"] = 3.5;
             });
-        EXPECT_EQ(to_str(out),
-                  "{\"k1\":\"c\\td\",\"k\\n2\":[3,5,6],\"k3\":87,\"k4\":[\"\\\\\"],\"k5\":42}");
+        EXPECT_EQ(to_str(out), "{\"k1\":\"c\\tdžř漢語\",\"k\\n2\":[3,5,6],\"k3\":87,\"k4\":["
+                               "\"\\\\\"],\"k5\":42,\"k6\":35e-1}");
     }
     {
         jsonwriter::Buffer out{};
