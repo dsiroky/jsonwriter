@@ -323,6 +323,17 @@ TEST(TestJsonWriter, List)
     }
 }
 
+static void add_keys(jsonwriter::ObjectProxy& object)
+{
+    object["aaa"] = "bbb";
+}
+
+static auto get_object()
+{
+    jsonwriter::Object obj{[](auto& object) { object["x"] = 5; }};
+    return obj;
+}
+
 TEST(TestJsonWriter, Objects)
 {
     {
@@ -354,6 +365,18 @@ TEST(TestJsonWriter, Objects)
         }});
         EXPECT_EQ(to_str(out), "{\"k1\":\"cd\",\"k2\":{\"o1\":[1,2],\"o2\":false,\"o\\r3\":"
                        "\"i\\no\"},\"k3\":false}");
+    }
+    {
+        jsonwriter::Buffer out{};
+        jsonwriter::write(out, jsonwriter::Object{[](auto& object) {
+            add_keys(object);
+        }});
+        EXPECT_EQ(to_str(out), "{\"aaa\":\"bbb\"}");
+    }
+    {
+        jsonwriter::Buffer out{};
+        jsonwriter::write(out, get_object());
+        EXPECT_EQ(to_str(out), "{\"x\":5}");
     }
 }
 

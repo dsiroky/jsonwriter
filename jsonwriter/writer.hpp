@@ -354,10 +354,41 @@ struct Formatter<std::optional<T>>
     }
 };
 
+class ListProxy : private detail::NoCopyMove
+{
+public:
+    ListProxy(Buffer& buffer)
+        : m_buffer{buffer}
+    { }
+
+    template<typename T>
+    void push_back(const T& value) { push_back_impl(value); }
+
+    template<typename T>
+    void push_back(const std::initializer_list<T> value) { push_back_impl(value); }
+
+private:
+    template<typename T>
+    void push_back_impl(const T& value)
+    {
+        if (erthink_likely(m_counter > 0)) {
+            m_buffer.append(',');
+        }
+        jsonwriter::write(m_buffer, value);
+        ++m_counter;
+    }
+
+    Buffer& m_buffer;
+    size_t m_counter{0};
+};
+
 template<typename Callback>
 class List
 {
 public:
+    static_assert(std::is_convertible_v<Callback, std::function<void(ListProxy&)>>,
+                  "the callback must be a callable like `void(ListProxy&)`.");
+
     List(const Callback& callback)
         : m_callback{callback}
     { }
@@ -371,36 +402,6 @@ private:
 template<typename Callback>
 struct Formatter<List<Callback>>
 {
-private:
-    class ListProxy : private detail::NoCopyMove
-    {
-    public:
-        ListProxy(Buffer& buffer)
-            : m_buffer{buffer}
-        { }
-
-        template<typename T>
-        void push_back(const T& value) { push_back_impl(value); }
-
-        template<typename T>
-        void push_back(const std::initializer_list<T> value) { push_back_impl(value); }
-
-    private:
-        template<typename T>
-        void push_back_impl(const T& value)
-        {
-            if (erthink_likely(m_counter > 0)) {
-                m_buffer.append(',');
-            }
-            jsonwriter::write(m_buffer, value);
-            ++m_counter;
-        }
-
-        Buffer& m_buffer;
-        size_t m_counter{0};
-    };
-
-public:
     static void write(Buffer& buffer, const List<Callback>& value)
     {
         buffer.append('[');
@@ -436,22 +437,8 @@ template<typename T> struct Formatter<std::deque<T>> : FormatterList { };
 template<typename T> struct Formatter<std::forward_list<T>> : FormatterList { };
 template<typename T> struct Formatter<std::list<T>> : FormatterList { };
 
-template<typename Callback>
-class Object
-{
-public:
-    Object(const Callback& callback)
-        : m_callback{callback}
-    { }
-
-private:
-    const Callback& m_callback;
-
-    friend struct Formatter<Object<Callback>>;
-};
-
-template<typename Callback>
-struct Formatter<Object<Callback>>
+/// A proxy to provide `object[key] = value` semantics.
+class ObjectProxy : private detail::NoCopyMove
 {
 private:
     class AssignmentProxy : private detail::NoCopyMove
@@ -477,31 +464,47 @@ private:
         Buffer& m_buffer;
     };
 
-    /// A proxy to provide `object[key] = value` semantics.
-    class ObjectProxy : private detail::NoCopyMove
-    {
-    public:
-        ObjectProxy(Buffer& buffer)
-            : m_buffer{buffer}
-        { }
-
-        AssignmentProxy operator[](const std::string_view key)
-        {
-            if (erthink_likely(m_counter > 0)) {
-                m_buffer.append(',');
-            }
-            ++m_counter;
-            Formatter<std::string_view>::write(m_buffer, key);
-            m_buffer.append(':');
-            return AssignmentProxy{m_buffer};
-        }
-
-    private:
-        Buffer& m_buffer;
-        size_t m_counter{0};
-    };
-
 public:
+    ObjectProxy(Buffer& buffer)
+        : m_buffer{buffer}
+    { }
+
+    AssignmentProxy operator[](const std::string_view key)
+    {
+        if (erthink_likely(m_counter > 0)) {
+            m_buffer.append(',');
+        }
+        ++m_counter;
+        Formatter<std::string_view>::write(m_buffer, key);
+        m_buffer.append(':');
+        return AssignmentProxy{m_buffer};
+    }
+
+private:
+    Buffer& m_buffer;
+    size_t m_counter{0};
+};
+
+template<typename Callback>
+class Object
+{
+public:
+    static_assert(std::is_convertible_v<Callback, std::function<void(ObjectProxy&)>>,
+                  "the callback must be a callable like `void(ObjectProxy&)`.");
+
+    Object(const Callback& callback)
+        : m_callback{callback}
+    { }
+
+private:
+    const Callback& m_callback;
+
+    friend struct Formatter<Object<Callback>>;
+};
+
+template<typename Callback>
+struct Formatter<Object<Callback>>
+{
     static void write(Buffer& buffer, const Object<Callback>& value)
     {
         buffer.append('{');
