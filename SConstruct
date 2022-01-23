@@ -13,12 +13,6 @@ AddOption("--optimization",
           nargs=1,
           choices=OPTIMIZATION_CHOICES,
           help="Optimization level [{}]. (default: %default)".format("|".join(OPTIMIZATION_CHOICES)))
-AddOption("--prefix",
-          dest="install_prefix",
-          default="/usr/local",
-          type="string",
-          nargs=1,
-          help="Installation prefix. (default: %default)")
 
 #==========================================================================
 
@@ -40,8 +34,6 @@ env["BUILD_DIR"] = "build"
 env.SConsignFile("$BUILD_DIR/.sconsign.$HOST_TYPE")
 
 env["CXXFILESUFFIX"] = ".cpp" # default is ".cc"
-
-env["INSTALL_PREFIX"] = GetOption("install_prefix")
 
 env["IS_MSVC"] = "msvc" in env["TOOLS"]
 
