@@ -7,9 +7,13 @@ gtest_lib = gtest_env.StaticLibrary("gtest", "3rdparty/googletest/googletest/src
 gbenchmark_env = thirdparty_env.Clone()
 gbenchmark_env.AppendUnique(
         CPPDEFINES=["NDEBUG"],
-        CCFLAGS=["-O3"],
         CPPPATH=["3rdparty/benchmark/include"]
     )
+if env["IS_MSVC"]:
+    gbenchmark_env.AppendUnique(CCFLAGS=["/O2"])
+else:
+    gbenchmark_env.AppendUnique(CCFLAGS=["-O3"])
+
 gbenchmark_lib = gbenchmark_env.StaticLibrary("gbenchmark", Glob("3rdparty/benchmark/src/*.cc",
                                                                  exclude="3rdparty/benchmark/src/benchmark_main.cc"))
 

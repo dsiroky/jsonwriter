@@ -16,6 +16,7 @@
 
 #include <fmt/format.h>
 
+#ifndef _MSC_VER
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wshadow"
 #pragma GCC diagnostic ignored "-Wold-style-cast"
@@ -23,8 +24,13 @@
 #ifdef __clang__
 #pragma GCC diagnostic ignored "-Wshorten-64-to-32"
 #endif
+#endif
+
 #include <jsonwriter/erthink/erthink_d2a.h++>
+
+#ifndef _MSC_VER
 #pragma GCC diagnostic pop
+#endif
 
 namespace jsonwriter {
 
@@ -149,7 +155,11 @@ private:
 
     holder_t allocate(const size_t count)
     {
+#ifdef _MSC_VER
+        return holder_t{new char[count]};
+#else
         return holder_t{new (std::align_val_t{64}) char[count]};
+#endif
     }
 
     static constexpr size_t INITIAL_CAPACITY{512};

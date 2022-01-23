@@ -1,4 +1,5 @@
-[![jsonwriter](https://circleci.com/gh/dsiroky/jsonwriter/tree/main.svg?style=shield)](https://circleci.com/gh/dsiroky/jsonwriter/?branch=main)
+[![circleci](https://circleci.com/gh/dsiroky/jsonwriter/tree/main.svg?style=shield)](https://circleci.com/gh/dsiroky/jsonwriter/?branch=main)
+[![appveyor](https://ci.appveyor.com/api/projects/status/60y6xtuwiswnawqv/branch/main?svg=true)](https://ci.appveyor.com/project/dsiroky/jsonwriter/branch/main)
 
 # Fast JSON writer/serializer
 

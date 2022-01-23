@@ -11,7 +11,7 @@ jobs:
       - run:
           command: "sudo apt update && sudo apt install g++ scons"
       - run:
-          command: "scons && ./build/test"
+          command: "scons --no-cache -j2 && ./build/test"
 
 workflows:
   test-workflow:

@@ -185,7 +185,7 @@ TEST(TestJsonWriter, Floats)
     }
     {
         jsonwriter::Buffer out{};
-        jsonwriter::write(out, M_PI);
+        jsonwriter::write(out, 3.141592653589793);
         EXPECT_EQ(to_str(out), "3141592653589793e-15");
     }
 }

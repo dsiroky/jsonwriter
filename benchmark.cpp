@@ -21,7 +21,9 @@ namespace jsonwriter {
 
 template<>
 struct Formatter<SmallStaticStruct> {
+#ifndef _MSC_VER
     __attribute__((always_inline)) inline
+#endif
     static void write(jsonwriter::Buffer& output, const SmallStaticStruct)
     {
         jsonwriter::write(output, jsonwriter::Object{[](auto& object) {
