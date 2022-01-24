@@ -397,8 +397,10 @@ template<typename Callback>
 class List
 {
 public:
+#ifndef _MSC_VER
     static_assert(std::is_convertible_v<Callback, std::function<void(ListProxy&)>>,
                   "the callback must be a callable like `void(ListProxy&)`.");
+#endif
 
     List(const Callback& callback)
         : m_callback{callback}
@@ -500,8 +502,10 @@ template<typename Callback>
 class Object
 {
 public:
+#ifndef _MSC_VER
     static_assert(std::is_convertible_v<Callback, std::function<void(ObjectProxy&)>>,
                   "the callback must be a callable like `void(ObjectProxy&)`.");
+#endif
 
     Object(const Callback& callback)
         : m_callback{callback}
