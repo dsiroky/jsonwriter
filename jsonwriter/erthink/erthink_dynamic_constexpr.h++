@@ -21,7 +21,7 @@
 
 #include <type_traits>
 
-namespace erthink {
+namespace jsonwriter::erthink {
 
 cxx11_constexpr bool is_constant_evaluated() cxx11_noexcept {
 #if defined(__cpp_lib_is_constant_evaluated)
@@ -85,4 +85,4 @@ cxx11_constexpr bool is_constant_evaluated() cxx11_noexcept {
 
 #endif
 
-} // namespace erthink
+} // namespace jsonwriter::erthink

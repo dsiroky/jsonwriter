@@ -31,7 +31,7 @@
 #pragma warning(pop)
 #endif
 
-namespace erthink {
+namespace jsonwriter::erthink {
 
 template <typename T> struct branchless_abs {
   typedef typename std::make_signed<T>::type signed_type;
@@ -84,4 +84,4 @@ static cxx11_constexpr bool msb(const uint32_t value) {
 #pragma warning(pop)
 #endif
 
-} // namespace erthink
+} // namespace jsonwriter::erthink

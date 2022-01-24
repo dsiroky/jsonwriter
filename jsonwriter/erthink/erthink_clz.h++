@@ -30,7 +30,7 @@
 #pragma warning(pop)
 #endif
 
-namespace erthink {
+namespace jsonwriter::erthink {
 
 template <typename T> cxx14_constexpr int clz(T v) noexcept;
 
@@ -142,4 +142,4 @@ template <> cxx14_constexpr int clz<uint64_t>(uint64_t v) noexcept {
 
 #endif /* compiler */
 
-} // namespace erthink
+} // namespace jsonwriter::erthink

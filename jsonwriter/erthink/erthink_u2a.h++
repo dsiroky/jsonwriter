@@ -34,7 +34,7 @@
 
 //------------------------------------------------------------------------------
 
-namespace erthink {
+namespace jsonwriter::erthink {
 
 #ifndef NAMESPACE_ERTHINK_U2A_DETAILS
 #define NAMESPACE_ERTHINK_U2A_DETAILS /* anonymous */
@@ -208,4 +208,4 @@ i2a(int64_t i64,
   return ptr;
 }
 
-} // namespace erthink
+} // namespace jsonwriter::erthink

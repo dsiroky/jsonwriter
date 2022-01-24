@@ -24,7 +24,7 @@
 /* TODO: refactoring defines to C++ functions and templateds */
 
 #ifdef __cplusplus
-namespace erthink {
+namespace jsonwriter::erthink {
 #endif
 
 #if defined(__e2k__) && __iset__ >= 5
@@ -308,5 +308,5 @@ static __maybe_unused __always_inline void sub64borrow_last(unsigned borrow,
 //------------------------------------------------------------------------------
 
 #ifdef __cplusplus
-} // namespace erthink
+} // namespace jsonwriter::erthink
 #endif

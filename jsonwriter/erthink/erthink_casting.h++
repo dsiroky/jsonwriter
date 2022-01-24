@@ -35,7 +35,7 @@
 #define ERTHINK_HAVE_cxx_concepts 0
 #endif /* ERTHINK_HAVE_cxx_concepts */
 
-namespace erthink {
+namespace jsonwriter::erthink {
 
 #if __cplusplus < 201402L
 template <bool B, class T = void>
@@ -109,4 +109,4 @@ template <typename TO, typename FROM,
 
 #endif /* ERTHINK_HAVE_std_bit_cast */
 
-} // namespace erthink
+} // namespace jsonwriter::erthink

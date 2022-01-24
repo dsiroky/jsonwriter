@@ -65,7 +65,7 @@
 
 //------------------------------------------------------------------------------
 
-namespace erthink {
+namespace jsonwriter::erthink {
 
 #ifndef NAMESPACE_ERTHINK_D2A_DETAILS
 #define NAMESPACE_ERTHINK_D2A_DETAILS /* anonymous */
@@ -921,4 +921,4 @@ fpclassify_from_uint(const uint64_t value) noexcept {
   return fpclassify<double>(value);
 }
 
-} // namespace erthink
+} // namespace jsonwriter::erthink

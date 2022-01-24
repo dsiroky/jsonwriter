@@ -25,7 +25,7 @@
 /* TODO: refactoring defines to C++ functions and templateds */
 
 #ifdef __cplusplus
-namespace erthink {
+namespace jsonwriter::erthink {
 #endif
 
 #if defined(__e2k__) && __iset__ >= 3
@@ -91,5 +91,5 @@ static __maybe_unused __always_inline uint64_t mul_64x64_128(uint64_t a,
 #endif /* mul_64x64_128() */
 
 #ifdef __cplusplus
-} // namespace erthink
+} // namespace jsonwriter::erthink
 #endif
