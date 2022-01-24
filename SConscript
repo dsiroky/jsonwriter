@@ -17,10 +17,6 @@ else:
 gbenchmark_lib = gbenchmark_env.StaticLibrary("gbenchmark", Glob("3rdparty/benchmark/src/*.cc",
                                                                  exclude="3rdparty/benchmark/src/benchmark_main.cc"))
 
-fmt_env = thirdparty_env.Clone()
-fmt_env.AppendUnique(CPPPATH=["3rdparty/fmt/include"])
-fmt_lib = fmt_env.StaticLibrary("fmt", Glob("3rdparty/fmt/src/*.cc"))
-
-env.AppendUnique(LIBS=[fmt_lib, gtest_lib, gbenchmark_lib])
+env.AppendUnique(LIBS=[gtest_lib, gbenchmark_lib])
 env.Program("test", ["test.cpp", "odr.cpp"])
 env.Program("benchmark", Glob("benchmark*.cpp"))

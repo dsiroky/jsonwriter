@@ -1,5 +1,4 @@
 #include <benchmark/benchmark.h>
-#include <fmt/format.h>
 
 #include "jsonwriter/writer.hpp"
 #include "benchmark_common.hpp"

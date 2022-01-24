@@ -9,12 +9,11 @@
 #include <forward_list>
 #include <initializer_list>
 #include <list>
+#include <memory>
 #include <optional>
 #include <type_traits>
 #include <utility>
 #include <vector>
-
-#include <fmt/format.h>
 
 #ifndef _MSC_VER
 #pragma GCC diagnostic push
@@ -27,6 +26,7 @@
 #endif
 
 #include <jsonwriter/erthink/erthink_d2a.h++>
+#include <jsonwriter/int.hpp>
 
 #ifndef _MSC_VER
 #pragma GCC diagnostic pop
@@ -256,7 +256,8 @@ struct Formatter<T, typename std::enable_if_t<std::is_integral_v<T>>>
     static void write(Buffer& buffer, const T value)
     {
         static_assert(std::is_integral_v<T>);
-        fmt::format_int str{value};
+        FormatInt format_int{};
+        const auto str = format_int.itostr(value);
         buffer.make_room(str.size());
         buffer.consume(std::copy_n(str.data(), str.size(), buffer.working_end()));
     }

@@ -190,7 +190,6 @@ env.AppendUnique(
         "#3rdparty/benchmark/include",
         "#3rdparty/googletest/googletest/include",
         "#3rdparty/googletest/googlemock/include",
-        "#3rdparty/fmt/include",
     ],
 )
 

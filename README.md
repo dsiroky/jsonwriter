@@ -58,4 +58,3 @@ BM_rapidjson_large_strings_dump_only                      142445 ns
 ## Dependencies
 
 * C++17
-* https://github.com/fmtlib/fmt 7.0+
