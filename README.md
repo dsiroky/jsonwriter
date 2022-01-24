@@ -4,7 +4,7 @@
 # Fast JSON writer/serializer
 
 * Fast. Really fast.
-* Small, single header only. `#include <jsonwriter/writer.hpp>`
+* Small, header only.
 * No inherent memory allocations.
 * No intermediate values storage.
 
@@ -15,18 +15,24 @@ serialization**.
 ## Example
 
 ```
-jsonwriter::Buffer out{};
-jsonwriter::write(out, jsonwriter::Object{[](auto& object) {
-    object["k1"] = "cd";
-    object["k2"] = jsonwriter::Object{[](auto& nested_object) {
-        nested_object["o1"] = {1, 2};
-        nested_object["o2"] = false;
-        nested_object["o3"] = "i\no";
-    }};
-    object["k3"] = false;
-}});
+#include <iostream>
+#include <jsonwriter/writer.hpp>
 
-std::cout << std::string_view{out.begin(), out.size()} << '\n';
+int main() {
+    jsonwriter::Buffer out{};
+    jsonwriter::write(out, jsonwriter::Object{[](auto& object) {
+        object["k1"] = "cd";
+        object["k2"] = jsonwriter::Object{[](auto& nested_object) {
+            nested_object["o1"] = {1, 2};
+            nested_object["o2"] = false;
+            nested_object["o3"] = "i\no";
+        }};
+        object["k3"] = true;
+    }});
+
+    std::cout << std::string_view{out.begin(), out.size()} << '\n';
+    return 0;
+}
 ```
 
 See `test.cpp` for more use cases. For custom formatters look for `jsonwriter::Formatter`.
