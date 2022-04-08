@@ -63,7 +63,7 @@ namespace {
 
 void BM_jsonwriter_simple_small_static_struct(benchmark::State& state)
 {
-    jsonwriter::Buffer out{};
+    jsonwriter::SimpleBuffer out{};
 
     for (auto _ : state) {
         jsonwriter::write(out, SmallStaticStruct{});
@@ -76,7 +76,7 @@ BENCHMARK(BM_jsonwriter_simple_small_static_struct);
 
 void BM_jsonwriter_simple_small_static_struct_list(benchmark::State& state)
 {
-    jsonwriter::Buffer out{};
+    jsonwriter::SimpleBuffer out{};
     std::vector<SmallStaticStruct> vec{1000};
 
     for (auto _ : state) {
@@ -90,7 +90,7 @@ BENCHMARK(BM_jsonwriter_simple_small_static_struct_list);
 
 void BM_jsonwriter_simple_small_static_struct_dynamic_list(benchmark::State& state)
 {
-    jsonwriter::Buffer out{};
+    jsonwriter::SimpleBuffer out{};
     std::vector<SmallStaticStruct> vec{1000};
 
     for (auto _ : state) {
@@ -108,7 +108,7 @@ BENCHMARK(BM_jsonwriter_simple_small_static_struct_dynamic_list);
 
 void BM_jsonwriter_simple_small_struct(benchmark::State& state)
 {
-    jsonwriter::Buffer out{};
+    jsonwriter::SimpleBuffer out{};
 
     for (auto _ : state) {
         jsonwriter::write(out, SmallStruct{});
@@ -121,7 +121,7 @@ BENCHMARK(BM_jsonwriter_simple_small_struct);
 
 void BM_jsonwriter_large_strings(benchmark::State& state)
 {
-    jsonwriter::Buffer out{};
+    jsonwriter::SimpleBuffer out{};
     out.reserve(large_string_list.size() * large_string_list[0].size() * 2);
 
     for (auto _ : state) {
@@ -135,7 +135,7 @@ BENCHMARK(BM_jsonwriter_large_strings);
 
 void BM_jsonwriter_large_list_of_ints(benchmark::State& state)
 {
-    jsonwriter::Buffer out{};
+    jsonwriter::SimpleBuffer out{};
     out.reserve(large_int_list.size() * 10);
 
     for (auto _ : state) {
@@ -149,7 +149,7 @@ BENCHMARK(BM_jsonwriter_large_list_of_ints);
 
 void BM_jsonwriter_large_list_of_bools(benchmark::State& state)
 {
-    jsonwriter::Buffer out{};
+    jsonwriter::SimpleBuffer out{};
     out.reserve(large_bool_list.size() * 10);
 
     for (auto _ : state) {

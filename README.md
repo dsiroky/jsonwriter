@@ -19,7 +19,7 @@ serialization**.
 #include <jsonwriter/writer.hpp>
 
 int main() {
-    jsonwriter::Buffer out{};
+    jsonwriter::SimpleBuffer out{};
     jsonwriter::write(out, jsonwriter::Object{[](auto& object) {
         object["k1"] = "cd";
         object["k2"] = jsonwriter::Object{[](auto& nested_object) {

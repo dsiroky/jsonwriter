@@ -1,3 +1,4 @@
+#include <iostream>
 #pragma once
 #ifndef WRITER_HPP__VHIS1CJC
 #define WRITER_HPP__VHIS1CJC
@@ -56,21 +57,22 @@ private:
 class Buffer
 {
 public:
-    explicit Buffer() { assert(size() + room() == capacity()); }
+    explicit Buffer() = default;
+    virtual ~Buffer() = default;
 
     Buffer(const Buffer& other) = delete;
     Buffer& operator=(const Buffer& other) = delete;
 
-    Buffer(Buffer&& other) { move_from(std::move(other)); }
-    Buffer& operator=(Buffer&& other) { move_from(std::move(other)); return *this; }
+    Buffer(Buffer&& other) = default;
+    Buffer& operator=(Buffer&& other) = default;
 
-    char* begin() noexcept { return m_ptr.get(); }
+    char* begin() noexcept { return m_ptr; }
     char* end() noexcept { return m_working_end; }
     const char* data() const noexcept { return begin(); }
     const char* end() const noexcept { return m_working_end; }
 
     char* data() noexcept { return begin(); }
-    const char* begin() const noexcept { return m_ptr.get(); }
+    const char* begin() const noexcept { return m_ptr; }
 
     // Use this pointer for appending data to the reserved space.
     char* working_end() noexcept { return m_working_end; }
@@ -83,15 +85,8 @@ public:
     {
         assert(m_ptr != nullptr);
         if (erthink_unlikely(count > m_capacity)) {
-            const auto old_size = size();
-            const auto new_capacity = std::max(count, m_capacity + m_capacity / 2);
-            auto new_ptr = allocate(new_capacity);
-            ::memcpy(new_ptr.get(), m_ptr.get(), old_size);
-            m_ptr = std::move(new_ptr);
-            m_working_end = begin() + old_size;
-            m_capacity = new_capacity;
+            realloc(size(), count);
         }
-        assert(capacity() >= count);
         assert(size() + room() == capacity());
     }
 
@@ -138,35 +133,99 @@ public:
         consume(std::copy_n(c, N - 1, m_working_end));
     }
 
-private:
-    using holder_t = std::unique_ptr<char[]>;
+protected:
+    /// Implement in derived class. It is called only if the current capacity
+    /// is exhausted.
+    virtual void realloc(size_t data_size, size_t new_capacity) = 0;
 
-    void move_from(Buffer&& other) {
+    /// Must be called by the derived class on every data pointer change:
+    /// * construction
+    /// * move construction/assignment
+    /// * realloc
+    void set_data(char* ptr, size_t size, size_t capacity)
+    {
+        assert(capacity >= m_capacity);
+
+        m_ptr = ptr;
+        m_working_end = ptr + size;
+        m_capacity = capacity;
+    }
+
+private:
+    char* m_ptr{nullptr};
+    char* m_working_end{nullptr};
+    size_t m_capacity{0};
+};
+
+/// Simple growing buffer with a fixed initial capacity.
+/// Moved-from instance behavior is undefined.
+template<size_t INITIAL_FIXED_CAPACITY = 512>
+class SimpleBuffer : public Buffer
+{
+public:
+    explicit SimpleBuffer()
+    {
+        set_data(m_ptr, 0, m_capacity);
+    }
+
+    SimpleBuffer(SimpleBuffer&& other) { move_from(std::move(other)); }
+    SimpleBuffer& operator=(SimpleBuffer&& other)
+    {
+        move_from(std::move(other));
+        return *this;
+    }
+
+    void realloc(const size_t data_size, const size_t new_capacity) override
+    {
+        // should be only growing
+        assert(new_capacity >= m_capacity);
+
+        // still fits in the static buffer
+        if (erthink_likely(new_capacity <= INITIAL_FIXED_CAPACITY)) {
+            return;
+        }
+
+        const auto bulk_new_capacity = std::max(new_capacity, m_capacity + m_capacity / 2);
+        auto new_dynamic = Dynamic{new char[bulk_new_capacity]};
+        assert(m_ptr != nullptr);
+        ::memcpy(new_dynamic.get(), m_ptr, data_size);
+
+        m_dynamic = std::move(new_dynamic);
+        m_ptr = m_dynamic.get();
+        m_capacity = bulk_new_capacity;
+
+        set_data(m_ptr, data_size, m_capacity);
+    }
+
+private:
+    void move_from(SimpleBuffer&& other)
+    {
         if (&other != this) {
             const auto old_size = other.size();
-            m_ptr = std::move(other.m_ptr);
-            m_working_end = begin() + old_size;
+
+            if (other.m_ptr == other.m_static.data()) {
+                m_static = other.m_static;
+                m_ptr = m_static.data();
+            } else {
+                m_dynamic = std::move(other.m_dynamic);
+                m_ptr = m_dynamic.get();
+            }
             m_capacity = other.m_capacity;
 
-            other.~Buffer();
-            new (&other) Buffer{};
+            other.~SimpleBuffer();
+            new (&other) SimpleBuffer{};
+
+            set_data(m_ptr, old_size, m_capacity);
+            other.set_data(nullptr, 0, m_capacity);
         }
     }
 
-    holder_t allocate(const size_t count)
-    {
-#ifdef _MSC_VER
-        return holder_t{new char[count]};
-#else
-        return holder_t{new (std::align_val_t{64}) char[count]};
-#endif
-    }
+    using Dynamic = std::unique_ptr<char[]>;
 
-    static constexpr size_t INITIAL_CAPACITY{512};
-
-    holder_t m_ptr{allocate(INITIAL_CAPACITY)};
-    char* m_working_end{m_ptr.get()};
-    size_t m_capacity{INITIAL_CAPACITY};
+    std::array<char, INITIAL_FIXED_CAPACITY> m_static;
+    Dynamic m_dynamic{};
+    char* m_ptr{m_static.data()};
+    size_t m_capacity{m_static.size()};
 };
 
 template<typename T>

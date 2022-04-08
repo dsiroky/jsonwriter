@@ -25,7 +25,7 @@ static std::vector<char> long_data{std::invoke([](){
 
 TEST(TestJsonBuffer, GrowConsume)
 {
-    jsonwriter::Buffer out{};
+    jsonwriter::SimpleBuffer out{};
 
     out.make_room(10);
     EXPECT_GE(out.room(), 10u);
@@ -52,22 +52,36 @@ TEST(TestJsonBuffer, GrowConsume)
     EXPECT_EQ((std::string_view{out.data(), 900}), (std::string_view{long_data.data(), 900}));
 }
 
-TEST(TestJsonBuffer, CopyMove)
+TEST(TestJsonBuffer, Move)
 {
     {
-        jsonwriter::Buffer orig{};
-
+        jsonwriter::SimpleBuffer orig{};
         orig.make_room(10);
         orig.consume(std::copy_n(long_data.begin(), 10, orig.working_end()));
 
         {
-            jsonwriter::Buffer newbuf{std::move(orig)};
+            jsonwriter::SimpleBuffer newbuf{std::move(orig)};
             EXPECT_EQ(newbuf.size(), 10u);
             EXPECT_EQ((std::string_view{newbuf.data(), 10}), (std::string_view{long_data.data(), 10}));
 
-            EXPECT_EQ(orig.size(), 0u);
-            EXPECT_GT(orig.capacity(), 0u);
-            EXPECT_NE((std::string_view{orig.data(), 10}), (std::string_view{long_data.data(), 10}));
+            // this should be undefined, nullptr test is a white box test
+            EXPECT_TRUE(orig.begin() == nullptr);
+        }
+    }
+
+    {
+        jsonwriter::SimpleBuffer orig{};
+        orig.make_room(10);
+        orig.consume(std::copy_n(long_data.begin(), 10, orig.working_end()));
+
+        {
+            jsonwriter::SimpleBuffer newbuf{};
+            newbuf = std::move(orig);
+            EXPECT_EQ(newbuf.size(), 10u);
+            EXPECT_EQ((std::string_view{newbuf.data(), 10}), (std::string_view{long_data.data(), 10}));
+
+            // this should be undefined, nullptr test is a white box test
+            EXPECT_TRUE(orig.begin() == nullptr);
         }
     }
 }
@@ -77,17 +91,17 @@ TEST(TestJsonBuffer, CopyMove)
 TEST(TestJsonWriter, Char)
 {
     {
-        jsonwriter::Buffer out{};
+        jsonwriter::SimpleBuffer out{};
         jsonwriter::write(out, char{'A'});
         EXPECT_EQ(to_str(out), "\"A\"");
     }
     {
-        jsonwriter::Buffer out{};
+        jsonwriter::SimpleBuffer out{};
         jsonwriter::write(out, char{'"'});
         EXPECT_EQ(to_str(out), "\"\\\"\"");
     }
     {
-        jsonwriter::Buffer out{};
+        jsonwriter::SimpleBuffer out{};
         jsonwriter::write(out, char{'\\'});
         EXPECT_EQ(to_str(out), "\"\\\\\"");
     }
@@ -96,33 +110,33 @@ TEST(TestJsonWriter, Char)
 TEST(TestJsonWriter, Integers)
 {
     {
-        jsonwriter::Buffer out{};
+        jsonwriter::SimpleBuffer out{};
         jsonwriter::write(out, 0);
         EXPECT_EQ(to_str(out), "0");
     }
     {
-        jsonwriter::Buffer out{};
+        jsonwriter::SimpleBuffer out{};
         jsonwriter::write(out, -345);
         EXPECT_EQ(to_str(out), "-345");
     }
     {
-        jsonwriter::Buffer out{};
+        jsonwriter::SimpleBuffer out{};
         jsonwriter::write(out, uint64_t{18446744073709551615ull});
         EXPECT_EQ(to_str(out), "18446744073709551615");
     }
     {
-        jsonwriter::Buffer out{};
+        jsonwriter::SimpleBuffer out{};
         jsonwriter::write(out, std::numeric_limits<int64_t>::max());
         EXPECT_EQ(to_str(out), "9223372036854775807");
     }
     {
-        jsonwriter::Buffer out{};
+        jsonwriter::SimpleBuffer out{};
         jsonwriter::write(out, std::numeric_limits<int64_t>::min());
         EXPECT_EQ(to_str(out), "-9223372036854775808");
     }
 
     const auto f = [](auto value) {
-        jsonwriter::Buffer out{};
+        jsonwriter::SimpleBuffer out{};
         jsonwriter::write(out, value);
         EXPECT_EQ(to_str(out), "42");
     };
@@ -164,27 +178,27 @@ TEST(TestJsonWriter, Integers)
 TEST(TestJsonWriter, Floats)
 {
     {
-        jsonwriter::Buffer out{};
+        jsonwriter::SimpleBuffer out{};
         jsonwriter::write(out, 0.0);
         EXPECT_EQ(to_str(out), "0");
     }
     {
-        jsonwriter::Buffer out{};
+        jsonwriter::SimpleBuffer out{};
         jsonwriter::write(out, 3.5);
         EXPECT_EQ(to_str(out), "35e-1");
     }
     {
-        jsonwriter::Buffer out{};
+        jsonwriter::SimpleBuffer out{};
         jsonwriter::write(out, 3.5f);
         EXPECT_EQ(to_str(out), "35e-1");
     }
     {
-        jsonwriter::Buffer out{};
+        jsonwriter::SimpleBuffer out{};
         jsonwriter::write(out, -123.456e-67);
         EXPECT_EQ(to_str(out), "-123456e-70");
     }
     {
-        jsonwriter::Buffer out{};
+        jsonwriter::SimpleBuffer out{};
         jsonwriter::write(out, 3.141592653589793);
         EXPECT_EQ(to_str(out), "3141592653589793e-15");
     }
@@ -193,12 +207,12 @@ TEST(TestJsonWriter, Floats)
 TEST(TestJsonWriter, Bool)
 {
     {
-        jsonwriter::Buffer out{};
+        jsonwriter::SimpleBuffer out{};
         jsonwriter::write(out, true);
         EXPECT_EQ(to_str(out), "true");
     }
     {
-        jsonwriter::Buffer out{};
+        jsonwriter::SimpleBuffer out{};
         jsonwriter::write(out, false);
         EXPECT_EQ(to_str(out), "false");
     }
@@ -207,12 +221,12 @@ TEST(TestJsonWriter, Bool)
 TEST(TestJsonWriter, Strings)
 {
     {
-        jsonwriter::Buffer out{};
+        jsonwriter::SimpleBuffer out{};
         jsonwriter::write(out, "");
         EXPECT_EQ(to_str(out), "\"\"");
     }
     {
-        jsonwriter::Buffer out{};
+        jsonwriter::SimpleBuffer out{};
         jsonwriter::write(out, "ab\"\t\f\r\n\b\\de\x01\x1f ř\xff漢語zzz");
         EXPECT_EQ(to_str(out), "\"ab\\\"\\t\\f\\r\\n\\b\\\\de\\u0001\\u001f ř\xff漢語zzz\"");
     }
@@ -221,44 +235,44 @@ TEST(TestJsonWriter, Strings)
 TEST(TestJsonWriter, Optional)
 {
     {
-        jsonwriter::Buffer out{};
+        jsonwriter::SimpleBuffer out{};
         jsonwriter::write(out, std::nullopt);
         EXPECT_EQ(to_str(out), "null");
     }
     {
-        jsonwriter::Buffer out{};
+        jsonwriter::SimpleBuffer out{};
         jsonwriter::write(out, std::optional<int>{});
         EXPECT_EQ(to_str(out), "null");
     }
 
     {
-        jsonwriter::Buffer out{};
+        jsonwriter::SimpleBuffer out{};
         jsonwriter::write(out, std::optional<std::string>{});
         EXPECT_EQ(to_str(out), "null");
     }
     {
-        jsonwriter::Buffer out{};
+        jsonwriter::SimpleBuffer out{};
         jsonwriter::write(out, std::optional<int>{2349});
         EXPECT_EQ(to_str(out), "2349");
     }
     {
-        jsonwriter::Buffer out{};
+        jsonwriter::SimpleBuffer out{};
         jsonwriter::write(out, std::optional<std::string>{"abc"});
         EXPECT_EQ(to_str(out), "\"abc\"");
     }
 
     {
-        jsonwriter::Buffer out{};
+        jsonwriter::SimpleBuffer out{};
         jsonwriter::write(out, std::optional<bool>{});
         EXPECT_EQ(to_str(out), "null");
     }
     {
-        jsonwriter::Buffer out{};
+        jsonwriter::SimpleBuffer out{};
         jsonwriter::write(out, std::optional<bool>{false});
         EXPECT_EQ(to_str(out), "false");
     }
     {
-        jsonwriter::Buffer out{};
+        jsonwriter::SimpleBuffer out{};
         jsonwriter::write(out, std::optional<bool>{true});
         EXPECT_EQ(to_str(out), "true");
     }
@@ -267,43 +281,43 @@ TEST(TestJsonWriter, Optional)
 TEST(TestJsonWriter, ListLikeContainers)
 {
     {
-        jsonwriter::Buffer out{};
+        jsonwriter::SimpleBuffer out{};
         // initializer list
         jsonwriter::write(out, {33, 44});
         EXPECT_EQ(to_str(out), "[33,44]");
     }
     {
-        jsonwriter::Buffer out{};
+        jsonwriter::SimpleBuffer out{};
         jsonwriter::write(out, std::initializer_list<int>{33, 44});
         EXPECT_EQ(to_str(out), "[33,44]");
     }
     {
-        jsonwriter::Buffer out{};
+        jsonwriter::SimpleBuffer out{};
         jsonwriter::write(out, {"ab", "c", "de\rf"});
         EXPECT_EQ(to_str(out), "[\"ab\",\"c\",\"de\\rf\"]");
     }
     {
-        jsonwriter::Buffer out{};
+        jsonwriter::SimpleBuffer out{};
         jsonwriter::write(out, std::vector<std::string>{"ab", "c", "de\rf"});
         EXPECT_EQ(to_str(out), "[\"ab\",\"c\",\"de\\rf\"]");
     }
     {
-        jsonwriter::Buffer out{};
+        jsonwriter::SimpleBuffer out{};
         jsonwriter::write(out, std::array<int, 3>{{33, 44, 999}});
         EXPECT_EQ(to_str(out), "[33,44,999]");
     }
     {
-        jsonwriter::Buffer out{};
+        jsonwriter::SimpleBuffer out{};
         jsonwriter::write(out, std::deque<int>{33, 44, 999});
         EXPECT_EQ(to_str(out), "[33,44,999]");
     }
     {
-        jsonwriter::Buffer out{};
+        jsonwriter::SimpleBuffer out{};
         jsonwriter::write(out, std::forward_list<int>{33, 44, 999});
         EXPECT_EQ(to_str(out), "[33,44,999]");
     }
     {
-        jsonwriter::Buffer out{};
+        jsonwriter::SimpleBuffer out{};
         jsonwriter::write(out, std::list<int>{33, 44, 999});
         EXPECT_EQ(to_str(out), "[33,44,999]");
     }
@@ -312,7 +326,7 @@ TEST(TestJsonWriter, ListLikeContainers)
 TEST(TestJsonWriter, List)
 {
     {
-        jsonwriter::Buffer out{};
+        jsonwriter::SimpleBuffer out{};
         jsonwriter::write(out, jsonwriter::List([](auto& list){
             list.push_back(33);
             list.push_back("abc");
@@ -338,7 +352,7 @@ TEST(TestJsonWriter, Objects)
 {
     {
         int some_value{42};
-        jsonwriter::Buffer out{};
+        jsonwriter::SimpleBuffer out{};
         jsonwriter::write(
             out,
             jsonwriter::Object{[some_value](auto& object) {
@@ -353,7 +367,7 @@ TEST(TestJsonWriter, Objects)
                                "\"\\\\\"],\"k5\":42,\"k6\":35e-1}");
     }
     {
-        jsonwriter::Buffer out{};
+        jsonwriter::SimpleBuffer out{};
         jsonwriter::write(out, jsonwriter::Object{[](auto& object) {
             object["k1"] = "cd";
             object["k2"] = jsonwriter::Object{[](auto& nested_object) {
@@ -367,14 +381,14 @@ TEST(TestJsonWriter, Objects)
                        "\"i\\no\"},\"k3\":false}");
     }
     {
-        jsonwriter::Buffer out{};
+        jsonwriter::SimpleBuffer out{};
         jsonwriter::write(out, jsonwriter::Object{[](auto& object) {
             add_keys(object);
         }});
         EXPECT_EQ(to_str(out), "{\"aaa\":\"bbb\"}");
     }
     {
-        jsonwriter::Buffer out{};
+        jsonwriter::SimpleBuffer out{};
         jsonwriter::write(out, get_object());
         EXPECT_EQ(to_str(out), "{\"x\":5}");
     }
@@ -406,7 +420,7 @@ struct jsonwriter::Formatter<SomeEnum>
 
 TEST(TestJsonWriter, CustomEnumLabel)
 {
-    jsonwriter::Buffer out{};
+    jsonwriter::SimpleBuffer out{};
     jsonwriter::write(out, SomeEnum::GREEN);
     EXPECT_EQ(to_str(out), "green");
 }
@@ -428,7 +442,7 @@ struct jsonwriter::Formatter<SomeStruct>
 
 TEST(TestJsonWriter, CustomStruct)
 {
-    jsonwriter::Buffer out{};
+    jsonwriter::SimpleBuffer out{};
     jsonwriter::write(out, SomeStruct{});
     EXPECT_EQ(to_str(out), "{\"a\":42}");
 }
