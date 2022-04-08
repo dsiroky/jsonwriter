@@ -419,10 +419,9 @@ struct SomeStruct
 template<>
 struct jsonwriter::Formatter<SomeStruct>
 {
-    template<typename Output>
-    static void write(Output& output, const SomeStruct& value)
+    static void write(Buffer& buffer, const SomeStruct& value)
     {
-        jsonwriter::write(output,
+        jsonwriter::write(buffer,
                           jsonwriter::Object{[&value](auto& object) { object["a"] = value.a; }});
     }
 };
