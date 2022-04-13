@@ -90,6 +90,7 @@ public:
         assert(size() + room() == capacity());
     }
 
+    /// Keep the allocated space but discard all data.
     void clear() noexcept { m_working_end = begin(); }
 
     /// Make room for at least "count" characters.
@@ -588,7 +589,7 @@ struct Formatter<Object<Callback>>
     }
 };
 
-/// JSON serializatin without inherent memory allocations. See tests for usage.
+/// JSON serialization without inherent memory allocations. See tests for usage.
 template<typename T>
 void write(Buffer& buffer, T&& value)
 {

@@ -86,6 +86,22 @@ TEST(TestJsonBuffer, Move)
     }
 }
 
+TEST(TestJsonBuffer, Clear)
+{
+    jsonwriter::SimpleBuffer out{};
+    out.make_room(10);
+    out.consume(std::copy_n(long_data.begin(), 10, out.working_end()));
+
+    out.clear();
+
+    EXPECT_EQ(out.size(), 0u);
+    EXPECT_EQ(out.begin(), out.end());
+
+    out.make_room(5);
+    out.consume(std::copy_n(long_data.begin(), 5, out.working_end()));
+    EXPECT_EQ((std::string_view{out.begin(), out.size()}), (std::string_view{long_data.data(), 5}));
+}
+
 //==========================================================================
 
 TEST(TestJsonWriter, Char)
