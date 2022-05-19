@@ -451,14 +451,17 @@ struct jsonwriter::Formatter<SomeStruct>
 {
     static void write(Buffer& buffer, const SomeStruct& value)
     {
-        jsonwriter::write(buffer,
-                          jsonwriter::Object{[&value](auto& object) { object["a"] = value.a; }});
+        jsonwriter::write(buffer, jsonwriter::Object{[&value, &buffer](auto& object) {
+                              object["a"] = value.a;
+                              object["ctx"] = std::any_cast<std::string>(buffer.context);
+                          }});
     }
 };
 
-TEST(TestJsonWriter, CustomStruct)
+TEST(TestJsonWriter, CustomStructWithContext)
 {
     jsonwriter::SimpleBuffer out{};
+    out.context = std::string{"hello"};
     jsonwriter::write(out, SomeStruct{});
-    EXPECT_EQ(to_str(out), "{\"a\":42}");
+    EXPECT_EQ(to_str(out), "{\"a\":42,\"ctx\":\"hello\"}");
 }

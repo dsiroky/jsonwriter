@@ -14,6 +14,7 @@ int main(int argc, char* argv[])
 }
 
 struct SmallStaticStruct {};
+struct SmallStaticStructWithContext {};
 struct SmallStruct {};
 
 namespace jsonwriter {
@@ -53,6 +54,28 @@ struct Formatter<SmallStruct> {
             }};
             object[random_strings[8]] = false;
             object[random_strings[9]] = 234.345678;
+        }});
+    }
+};
+
+template<>
+struct Formatter<SmallStaticStructWithContext> {
+#ifndef _MSC_VER
+    __attribute__((always_inline)) inline
+#endif
+    static void write(jsonwriter::Buffer& output, const SmallStaticStructWithContext)
+    {
+        jsonwriter::write(output, jsonwriter::Object{[&output](auto& object) {
+            object["k1"] = "cd";
+            object["k2"] = jsonwriter::Object{[](auto& nested_object) {
+                nested_object["o1"] = {1, 2, 999999999};
+                nested_object["o2"] = false;
+                nested_object["o\r3"] = "i\no";
+                nested_object["o4"] = 'c';
+            }};
+            object["k3"] = false;
+            object["k4"] = 234.345678;
+            object["k5"] = std::any_cast<int>(output.context);
         }});
     }
 };
@@ -118,6 +141,20 @@ void BM_jsonwriter_simple_small_struct(benchmark::State& state)
     }
 }
 BENCHMARK(BM_jsonwriter_simple_small_struct);
+
+void BM_jsonwriter_simple_small_static_struct_with_context(benchmark::State& state)
+{
+    jsonwriter::SimpleBuffer out{};
+    out.context = 19283847;
+
+    for (auto _ : state) {
+        jsonwriter::write(out, SmallStaticStructWithContext{});
+        benchmark::DoNotOptimize(out.begin());
+        benchmark::ClobberMemory();
+        out.clear();
+    }
+}
+BENCHMARK(BM_jsonwriter_simple_small_static_struct_with_context);
 
 void BM_jsonwriter_large_strings(benchmark::State& state)
 {

@@ -4,6 +4,7 @@
 #define WRITER_HPP__VHIS1CJC
 
 #include <algorithm>
+#include <any>
 #include <array>
 #include <cstring>
 #include <deque>
@@ -133,6 +134,9 @@ public:
         make_room(N - 1);
         consume(std::copy_n(c, N - 1, m_working_end));
     }
+
+    /// Put anything you need in here.
+    std::any context{};
 
 protected:
     /// Implement in derived class. It is called only if the current capacity
