@@ -9,6 +9,7 @@
 #include <cstring>
 #include <deque>
 #include <forward_list>
+#include <functional>
 #include <initializer_list>
 #include <list>
 #include <memory>
