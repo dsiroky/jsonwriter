@@ -465,3 +465,40 @@ TEST(TestJsonWriter, CustomStructWithContext)
     jsonwriter::write(out, SomeStruct{});
     EXPECT_EQ(to_str(out), "{\"a\":42,\"ctx\":\"hello\"}");
 }
+
+TEST(TestJsonWriter, CustomStructWithBuiltInFormatter)
+{
+    struct OtherStruct
+    {
+        int b{666};
+
+        void write(jsonwriter::Buffer& buffer)
+        {
+            jsonwriter::write(buffer,
+                              jsonwriter::Object{[this](auto& object) { object["b"] = b; }});
+        }
+    };
+
+    jsonwriter::SimpleBuffer out{};
+    jsonwriter::write(out, OtherStruct{});
+    EXPECT_EQ(to_str(out), "{\"b\":666}");
+}
+
+TEST(TestJsonWriter, CustomStructWithBuiltInFormatter_Const)
+{
+    struct OtherStruct
+    {
+        int b{666};
+
+        void write(jsonwriter::Buffer& buffer) const
+        {
+            jsonwriter::write(buffer,
+                              jsonwriter::Object{[this](auto& object) { object["b"] = b; }});
+        }
+    };
+
+    jsonwriter::SimpleBuffer out{};
+    const OtherStruct s{};
+    jsonwriter::write(out, s);
+    EXPECT_EQ(to_str(out), "{\"b\":666}");
+}

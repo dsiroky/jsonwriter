@@ -35,7 +35,7 @@ int main() {
 }
 ```
 
-See `test.cpp` for more use cases. For custom formatters look for `jsonwriter::Formatter`.
+See `test.cpp` for more use cases. For custom formatters look for `jsonwriter::Formatter` or `void write(jsonwriter::Buffer& buffer)` member function.
 
 ## Benchmarks
 

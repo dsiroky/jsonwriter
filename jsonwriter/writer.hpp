@@ -305,6 +305,26 @@ struct EscapeMaps
 
 static constexpr EscapeMaps escape_maps{};
 
+template<typename T>
+class HasWriteFunction
+{
+    template<typename U>
+    static std::true_type test_signature(void (U::*)(Buffer&));
+    template<typename U>
+    static std::true_type test_signature(void (U::*)(Buffer&) const);
+
+    template<typename U>
+    static decltype(test_signature(&U::write)) test(std::nullptr_t);
+
+    template<typename>
+    static std::false_type test(...);
+
+    using type = decltype(test<T>(nullptr));
+
+public:
+    static const bool value = type::value;
+};
+
 } // namespace detail
 
 /// Similar to fmt::formatter. Specialize the template for custom types.
@@ -598,7 +618,12 @@ struct Formatter<Object<Callback>>
 template<typename T>
 void write(Buffer& buffer, T&& value)
 {
-    Formatter<std::remove_cv_t<std::remove_reference_t<T>>>::write(buffer, std::forward<T>(value));
+    using RawT = std::remove_cv_t<std::remove_reference_t<T>>;
+    if constexpr (detail::HasWriteFunction<RawT>::value) {
+        value.write(buffer);
+    } else {
+        Formatter<RawT>::write(buffer, std::forward<T>(value));
+    }
 }
 
 template<typename T>
