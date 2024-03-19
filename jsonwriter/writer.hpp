@@ -1,4 +1,3 @@
-#include <iostream>
 #pragma once
 #ifndef WRITER_HPP__VHIS1CJC
 #define WRITER_HPP__VHIS1CJC
