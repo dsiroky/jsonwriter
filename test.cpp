@@ -298,6 +298,11 @@ TEST(TestJsonWriter, ListLikeContainers)
 {
     {
         jsonwriter::SimpleBuffer out{};
+        jsonwriter::write(out, jsonwriter::empty_list);
+        EXPECT_EQ(to_str(out), "[]");
+    }
+    {
+        jsonwriter::SimpleBuffer out{};
         // initializer list
         jsonwriter::write(out, {33, 44});
         EXPECT_EQ(to_str(out), "[33,44]");
@@ -366,6 +371,11 @@ static auto get_object()
 
 TEST(TestJsonWriter, Objects)
 {
+    {
+        jsonwriter::SimpleBuffer out{};
+        jsonwriter::write(out, jsonwriter::empty_object);
+        EXPECT_EQ(to_str(out), "{}");
+    }
     {
         int some_value{42};
         jsonwriter::SimpleBuffer out{};

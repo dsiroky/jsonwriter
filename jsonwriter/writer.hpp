@@ -614,6 +614,18 @@ struct Formatter<Object<Callback>>
     }
 };
 
+constexpr inline std::array<int, 0> empty_list{};
+constexpr inline struct EmptyObject {} empty_object{};
+
+template<>
+struct Formatter<EmptyObject>
+{
+    static void write(Buffer& buffer, const EmptyObject&)
+    {
+        buffer.append("{}");
+    }
+};
+
 /// JSON serialization without inherent memory allocations. See tests for usage.
 template<typename T>
 void write(Buffer& buffer, T&& value)

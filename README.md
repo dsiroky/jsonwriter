@@ -26,6 +26,8 @@ int main() {
             nested_object["o1"] = {1, 2};
             nested_object["o2"] = false;
             nested_object["o3"] = "i\no";
+            nested_object["o4"] = jsonwriter::empty_list;
+            nested_object["o5"] = jsonwriter::empty_object;
         }};
         object["k3"] = true;
     }});
