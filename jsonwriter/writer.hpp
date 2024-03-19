@@ -164,7 +164,7 @@ private:
 
 /// Simple growing buffer with a fixed initial capacity.
 /// Moved-from instance behavior is undefined.
-template<size_t INITIAL_FIXED_CAPACITY = 512>
+template<size_t INITIAL_FIXED_CAPACITY = 1024>
 class SimpleBuffer : public Buffer
 {
 public:
@@ -239,9 +239,11 @@ namespace detail {
 struct EscapeMaps
 {
     static constexpr size_t SIZE{256};
+    // Allow the compiler to copy characters as 8 byte words.
+    static constexpr size_t MAX_LEN{8};
 
     std::array<bool, SIZE> is_escaped{};
-    std::array<std::pair<std::array<char, 6>, uint8_t>, SIZE> char_map{};
+    std::array<std::pair<std::array<char, MAX_LEN>, uint8_t>, SIZE> char_map{};
 
     constexpr EscapeMaps()
     {
@@ -387,15 +389,17 @@ struct Formatter<std::string_view>
             static constexpr size_t BULK{64};
 
             // enough room for all characters to be `\uXXXX` and a terminating '"'
-            buffer.make_room(std::max(BULK * 6 + 1, buffer.room()));
+            buffer.make_room(std::max(BULK * detail::EscapeMaps::MAX_LEN + 1, buffer.room()));
 
             const size_t bulk_size = std::min(BULK, static_cast<size_t>(value.end() - it));
             for (size_t i{0}; i < bulk_size; ++i, ++it) {
                 const char c = *it;
-                if (erthink_unlikely(detail::escape_maps.is_escaped[static_cast<uint8_t>(c)])) {
-                    const auto& [replacement, len]
-                        = detail::escape_maps.char_map[static_cast<uint8_t>(c)];
-                    buffer.consume(std::copy_n(replacement.begin(), len, buffer.working_end()));
+                const auto char_index = static_cast<uint8_t>(c);
+                if (erthink_unlikely(detail::escape_maps.is_escaped[char_index])) {
+                    const auto& [replacement, len] = detail::escape_maps.char_map[char_index];
+                    std::copy_n(replacement.begin(), detail::EscapeMaps::MAX_LEN,
+                                buffer.working_end());
+                    buffer.consume(len);
                 } else {
                     buffer.append_no_grow(c);
                 }
