@@ -475,15 +475,15 @@ private:
     template<typename T>
     void push_back_impl(const T& value)
     {
-        if (erthink_likely(m_counter > 0)) {
+        if (erthink_likely(!m_first)) {
             m_buffer.append(',');
         }
         jsonwriter::write(m_buffer, value);
-        ++m_counter;
+        m_first = false;
     }
 
     Buffer& m_buffer;
-    size_t m_counter{0};
+    bool m_first{true};
 };
 
 template<typename Callback>
@@ -592,10 +592,10 @@ public:
 
     AssignmentProxy operator[](const std::string_view key)
     {
-        if (erthink_likely(m_counter > 0)) {
+        if (erthink_likely(!m_first)) {
             m_buffer.append(',');
         }
-        ++m_counter;
+        m_first = false;
         Formatter<std::string_view>::write(m_buffer, key);
         m_buffer.append(':');
         return AssignmentProxy{m_buffer};
@@ -603,7 +603,7 @@ public:
 
 private:
     Buffer& m_buffer;
-    size_t m_counter{0};
+    bool m_first{true};
 };
 
 template<typename Callback>
