@@ -1,4 +1,3 @@
-#include <iterator>
 #include <vector>
 
 #include <gtest/gtest.h>
@@ -13,13 +12,13 @@ int main(int argc, char* argv[])
 
 static std::string to_str(const jsonwriter::Buffer& b) { return std::string{b.begin(), b.end()}; }
 
-static std::vector<char> long_data{std::invoke([](){
-            std::vector<char> v(10000);
-            for (size_t i{0}; i < v.size(); ++i) {
-                v[i] = static_cast<char>(i);
-            }
-            return v;
-        })};
+static std::vector<char> long_data{std::invoke([]() {
+    std::vector<char> v(10000);
+    for (size_t i{0}; i < v.size(); ++i) {
+        v[i] = static_cast<char>(i);
+    }
+    return v;
+})};
 
 //==========================================================================
 
@@ -62,7 +61,8 @@ TEST(TestJsonBuffer, Move)
         {
             jsonwriter::SimpleBuffer newbuf{std::move(orig)};
             EXPECT_EQ(newbuf.size(), 10u);
-            EXPECT_EQ((std::string_view{newbuf.data(), 10}), (std::string_view{long_data.data(), 10}));
+            EXPECT_EQ((std::string_view{newbuf.data(), 10}),
+                      (std::string_view{long_data.data(), 10}));
 
             // this should be undefined, nullptr test is a white box test
             EXPECT_TRUE(orig.begin() == nullptr);
@@ -78,7 +78,8 @@ TEST(TestJsonBuffer, Move)
             jsonwriter::SimpleBuffer newbuf{};
             newbuf = std::move(orig);
             EXPECT_EQ(newbuf.size(), 10u);
-            EXPECT_EQ((std::string_view{newbuf.data(), 10}), (std::string_view{long_data.data(), 10}));
+            EXPECT_EQ((std::string_view{newbuf.data(), 10}),
+                      (std::string_view{long_data.data(), 10}));
 
             // this should be undefined, nullptr test is a white box test
             EXPECT_TRUE(orig.begin() == nullptr);
@@ -348,20 +349,17 @@ TEST(TestJsonWriter, List)
 {
     {
         jsonwriter::SimpleBuffer out{};
-        jsonwriter::write(out, jsonwriter::List([](auto& list){
-            list.push_back(33);
-            list.push_back("abc");
-            list.push_back(true);
-            list.push_back({1, 2, 3});
-        }));
+        jsonwriter::write(out, jsonwriter::List([](auto& list) {
+                              list.push_back(33);
+                              list.push_back("abc");
+                              list.push_back(true);
+                              list.push_back({1, 2, 3});
+                          }));
         EXPECT_EQ(to_str(out), "[33,\"abc\",true,[1,2,3]]");
     }
 }
 
-static void add_keys(jsonwriter::ObjectProxy& object)
-{
-    object["aaa"] = "bbb";
-}
+static void add_keys(jsonwriter::ObjectProxy& object) { object["aaa"] = "bbb"; }
 
 static auto get_object()
 {
@@ -379,38 +377,34 @@ TEST(TestJsonWriter, Objects)
     {
         int some_value{42};
         jsonwriter::SimpleBuffer out{};
-        jsonwriter::write(
-            out,
-            jsonwriter::Object{[some_value](auto& object) {
-                object["k1"] = "c\tdžř漢語";
-                object["k\n2"] = {3, 5, 6};
-                object["k3"] = 87;
-                object["k4"] = {"\\"};
-                object["k5"] = some_value;
-                object["k6"] = 3.5;
-            }});
+        jsonwriter::write(out, jsonwriter::Object{[some_value](auto& object) {
+                              object["k1"] = "c\tdžř漢語";
+                              object["k\n2"] = {3, 5, 6};
+                              object["k3"] = 87;
+                              object["k4"] = {"\\"};
+                              object["k5"] = some_value;
+                              object["k6"] = 3.5;
+                          }});
         EXPECT_EQ(to_str(out), "{\"k1\":\"c\\tdžř漢語\",\"k\\n2\":[3,5,6],\"k3\":87,\"k4\":["
                                "\"\\\\\"],\"k5\":42,\"k6\":35e-1}");
     }
     {
         jsonwriter::SimpleBuffer out{};
         jsonwriter::write(out, jsonwriter::Object{[](auto& object) {
-            object["k1"] = "cd";
-            object["k2"] = jsonwriter::Object{[](auto& nested_object) {
-                nested_object["o1"] = {1, 2};
-                nested_object["o2"] = false;
-                nested_object["o\r3"] = "i\no";
-            }};
-            object["k3"] = false;
-        }});
+                              object["k1"] = "cd";
+                              object["k2"] = jsonwriter::Object{[](auto& nested_object) {
+                                  nested_object["o1"] = {1, 2};
+                                  nested_object["o2"] = false;
+                                  nested_object["o\r3"] = "i\no";
+                              }};
+                              object["k3"] = false;
+                          }});
         EXPECT_EQ(to_str(out), "{\"k1\":\"cd\",\"k2\":{\"o1\":[1,2],\"o2\":false,\"o\\r3\":"
-                       "\"i\\no\"},\"k3\":false}");
+                               "\"i\\no\"},\"k3\":false}");
     }
     {
         jsonwriter::SimpleBuffer out{};
-        jsonwriter::write(out, jsonwriter::Object{[](auto& object) {
-            add_keys(object);
-        }});
+        jsonwriter::write(out, jsonwriter::Object{[](auto& object) { add_keys(object); }});
         EXPECT_EQ(to_str(out), "{\"aaa\":\"bbb\"}");
     }
     {

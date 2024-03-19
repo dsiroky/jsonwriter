@@ -168,10 +168,7 @@ template<size_t INITIAL_FIXED_CAPACITY = 512>
 class SimpleBuffer : public Buffer
 {
 public:
-    explicit SimpleBuffer()
-    {
-        set_data(m_ptr, 0, m_capacity);
-    }
+    explicit SimpleBuffer() { set_data(m_ptr, 0, m_capacity); }
 
     SimpleBuffer(SimpleBuffer&& other) { move_from(std::move(other)); }
     SimpleBuffer& operator=(SimpleBuffer&& other)
@@ -356,8 +353,12 @@ struct FormatterFloat
     }
 };
 
-template<> struct Formatter<float> : FormatterFloat { };
-template<> struct Formatter<double> : FormatterFloat { };
+template<>
+struct Formatter<float> : FormatterFloat
+{ };
+template<>
+struct Formatter<double> : FormatterFloat
+{ };
 
 template<>
 struct Formatter<bool>
@@ -405,8 +406,12 @@ struct Formatter<std::string_view>
     }
 };
 
-template<> struct Formatter<const char*> : Formatter<std::string_view> { };
-template<> struct Formatter<std::string> : Formatter<std::string_view> { };
+template<>
+struct Formatter<const char*> : Formatter<std::string_view>
+{ };
+template<>
+struct Formatter<std::string> : Formatter<std::string_view>
+{ };
 
 template<size_t N>
 struct Formatter<char[N]>
@@ -430,10 +435,7 @@ struct Formatter<char>
 template<>
 struct Formatter<std::nullopt_t>
 {
-    static void write(Buffer& buffer, const std::nullopt_t)
-    {
-        buffer.append("null");
-    }
+    static void write(Buffer& buffer, const std::nullopt_t) { buffer.append("null"); }
 };
 
 template<typename T>
@@ -454,13 +456,20 @@ class ListProxy : private detail::NoCopyMove
 public:
     ListProxy(Buffer& buffer)
         : m_buffer{buffer}
-    { }
+    {
+    }
 
     template<typename T>
-    void push_back(const T& value) { push_back_impl(value); }
+    void push_back(const T& value)
+    {
+        push_back_impl(value);
+    }
 
     template<typename T>
-    void push_back(const std::initializer_list<T> value) { push_back_impl(value); }
+    void push_back(const std::initializer_list<T> value)
+    {
+        push_back_impl(value);
+    }
 
 private:
     template<typename T>
@@ -488,7 +497,8 @@ public:
 
     List(const Callback& callback)
         : m_callback{callback}
-    { }
+    {
+    }
 
 private:
     const Callback& m_callback;
@@ -527,12 +537,24 @@ struct FormatterList
     }
 };
 
-template<typename T> struct Formatter<std::initializer_list<T>> : FormatterList { };
-template<typename T> struct Formatter<std::vector<T>> : FormatterList { };
-template<typename T, size_t N> struct Formatter<std::array<T, N>> : FormatterList { };
-template<typename T> struct Formatter<std::deque<T>> : FormatterList { };
-template<typename T> struct Formatter<std::forward_list<T>> : FormatterList { };
-template<typename T> struct Formatter<std::list<T>> : FormatterList { };
+template<typename T>
+struct Formatter<std::initializer_list<T>> : FormatterList
+{ };
+template<typename T>
+struct Formatter<std::vector<T>> : FormatterList
+{ };
+template<typename T, size_t N>
+struct Formatter<std::array<T, N>> : FormatterList
+{ };
+template<typename T>
+struct Formatter<std::deque<T>> : FormatterList
+{ };
+template<typename T>
+struct Formatter<std::forward_list<T>> : FormatterList
+{ };
+template<typename T>
+struct Formatter<std::list<T>> : FormatterList
+{ };
 
 /// A proxy to provide `object[key] = value` semantics.
 class ObjectProxy : private detail::NoCopyMove
@@ -543,7 +565,8 @@ private:
     public:
         AssignmentProxy(Buffer& buffer)
             : m_buffer{buffer}
-        { }
+        {
+        }
 
         template<typename T>
         void operator=(T&& value)
@@ -564,7 +587,8 @@ private:
 public:
     ObjectProxy(Buffer& buffer)
         : m_buffer{buffer}
-    { }
+    {
+    }
 
     AssignmentProxy operator[](const std::string_view key)
     {
@@ -593,7 +617,8 @@ public:
 
     Object(const Callback& callback)
         : m_callback{callback}
-    { }
+    {
+    }
 
 private:
     const Callback& m_callback;
@@ -614,15 +639,14 @@ struct Formatter<Object<Callback>>
 };
 
 constexpr inline std::array<int, 0> empty_list{};
-constexpr inline struct EmptyObject {} empty_object{};
+constexpr inline struct EmptyObject
+{
+} empty_object{};
 
 template<>
 struct Formatter<EmptyObject>
 {
-    static void write(Buffer& buffer, const EmptyObject&)
-    {
-        buffer.append("{}");
-    }
+    static void write(Buffer& buffer, const EmptyObject&) { buffer.append("{}"); }
 };
 
 /// JSON serialization without inherent memory allocations. See tests for usage.
