@@ -184,6 +184,34 @@ void BM_jsonwriter_large_list_of_ints(benchmark::State& state)
 }
 BENCHMARK(BM_jsonwriter_large_list_of_ints);
 
+void BM_jsonwriter_large_list_of_floats(benchmark::State& state)
+{
+    jsonwriter::SimpleBuffer out{};
+    out.reserve(large_float_list.size() * 10);
+
+    for (auto _ : state) {
+        jsonwriter::write(out, large_float_list);
+        benchmark::DoNotOptimize(out.begin());
+        benchmark::ClobberMemory();
+        out.clear();
+    }
+}
+BENCHMARK(BM_jsonwriter_large_list_of_floats);
+
+void BM_jsonwriter_large_list_of_doubles(benchmark::State& state)
+{
+    jsonwriter::SimpleBuffer out{};
+    out.reserve(large_double_list.size() * 10);
+
+    for (auto _ : state) {
+        jsonwriter::write(out, large_double_list);
+        benchmark::DoNotOptimize(out.begin());
+        benchmark::ClobberMemory();
+        out.clear();
+    }
+}
+BENCHMARK(BM_jsonwriter_large_list_of_doubles);
+
 void BM_jsonwriter_large_list_of_bools(benchmark::State& state)
 {
     jsonwriter::SimpleBuffer out{};

@@ -197,27 +197,32 @@ TEST(TestJsonWriter, Floats)
     {
         jsonwriter::SimpleBuffer out{};
         jsonwriter::write(out, 0.0);
-        EXPECT_EQ(to_str(out), "0");
+        EXPECT_EQ(to_str(out), "0E0");
     }
     {
         jsonwriter::SimpleBuffer out{};
         jsonwriter::write(out, 3.5);
-        EXPECT_EQ(to_str(out), "35e-1");
+        EXPECT_EQ(to_str(out), "3.5E0");
     }
     {
         jsonwriter::SimpleBuffer out{};
         jsonwriter::write(out, 3.5f);
-        EXPECT_EQ(to_str(out), "35e-1");
+        EXPECT_EQ(to_str(out), "3.5E0");
+    }
+    {
+        jsonwriter::SimpleBuffer out{};
+        jsonwriter::write(out, 36.6472f);
+        EXPECT_EQ(to_str(out), "3.66472E1");
     }
     {
         jsonwriter::SimpleBuffer out{};
         jsonwriter::write(out, -123.456e-67);
-        EXPECT_EQ(to_str(out), "-123456e-70");
+        EXPECT_EQ(to_str(out), "-1.23456E-65");
     }
     {
         jsonwriter::SimpleBuffer out{};
         jsonwriter::write(out, 3.141592653589793);
-        EXPECT_EQ(to_str(out), "3141592653589793e-15");
+        EXPECT_EQ(to_str(out), "3.141592653589793E0");
     }
 }
 
@@ -386,7 +391,7 @@ TEST(TestJsonWriter, Objects)
                               object["k6"] = 3.5;
                           }});
         EXPECT_EQ(to_str(out), "{\"k1\":\"c\\tdžř漢語\",\"k\\n2\":[3,5,6],\"k3\":87,\"k4\":["
-                               "\"\\\\\"],\"k5\":42,\"k6\":35e-1}");
+                               "\"\\\\\"],\"k5\":42,\"k6\":3.5E0}");
     }
     {
         jsonwriter::SimpleBuffer out{};

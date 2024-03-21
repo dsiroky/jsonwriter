@@ -36,6 +36,22 @@ inline const auto large_bool_list = std::invoke([]() {
     return v;
 });
 
+inline const auto large_float_list = std::invoke([]() {
+    std::vector<float> v{};
+    for (int i{0}; i < 10000; ++i) {
+        v.push_back(static_cast<float>(i));
+    }
+    return v;
+});
+
+inline const auto large_double_list = std::invoke([]() {
+    std::vector<double> v{};
+    for (int i{0}; i < 10000; ++i) {
+        v.push_back(i);
+    }
+    return v;
+});
+
 inline const auto random_strings = std::invoke([]() {
     static const char alphanum[] = "0123456789"
                                    "ABCDEFGHIJKLMNOPQRSTUVWXYZ"

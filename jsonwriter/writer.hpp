@@ -27,7 +27,7 @@
 #endif
 #endif
 
-#include <jsonwriter/erthink/erthink_d2a.h++>
+#include <jsonwriter/dragonbox/dragonbox_to_chars.h>
 #include <jsonwriter/int.hpp>
 
 #ifndef _MSC_VER
@@ -85,7 +85,7 @@ public:
     void reserve(const size_t count)
     {
         assert(m_ptr != nullptr);
-        if (erthink_unlikely(count > m_capacity)) {
+        if (count > m_capacity) {
             realloc(size(), count);
         }
         assert(size() + room() == capacity());
@@ -183,7 +183,7 @@ public:
         assert(new_capacity >= m_capacity);
 
         // still fits in the static buffer
-        if (erthink_likely(new_capacity <= INITIAL_FIXED_CAPACITY)) {
+        if (new_capacity <= INITIAL_FIXED_CAPACITY) {
             return;
         }
 
@@ -346,20 +346,22 @@ struct Formatter<T, typename std::enable_if_t<std::is_integral_v<T>>>
     }
 };
 
+template<typename FloatType>
 struct FormatterFloat
 {
-    static void write(Buffer& buffer, const double value)
+    static void write(Buffer& buffer, const FloatType value)
     {
-        buffer.make_room(erthink::d2a_max_chars);
-        buffer.consume(erthink::d2a(value, buffer.working_end()));
+        buffer.make_room(jkj::dragonbox::max_output_string_length<FloatType>);
+        const auto end = jkj::dragonbox::to_chars_n(value, buffer.working_end());
+        buffer.consume(static_cast<size_t>(end - buffer.working_end()));
     }
 };
 
 template<>
-struct Formatter<float> : FormatterFloat
+struct Formatter<float> : FormatterFloat<float>
 { };
 template<>
-struct Formatter<double> : FormatterFloat
+struct Formatter<double> : FormatterFloat<double>
 { };
 
 template<>
@@ -395,7 +397,7 @@ struct Formatter<std::string_view>
             for (size_t i{0}; i < bulk_size; ++i, ++it) {
                 const char c = *it;
                 const auto char_index = static_cast<uint8_t>(c);
-                if (erthink_unlikely(detail::escape_maps.is_escaped[char_index])) {
+                if (detail::escape_maps.is_escaped[char_index]) {
                     const auto& [replacement, len] = detail::escape_maps.char_map[char_index];
                     std::copy_n(replacement.begin(), detail::EscapeMaps::MAX_LEN,
                                 buffer.working_end());
@@ -479,7 +481,7 @@ private:
     template<typename T>
     void push_back_impl(const T& value)
     {
-        if (erthink_likely(!m_first)) {
+        if (!m_first) {
             m_buffer.append(',');
         }
         jsonwriter::write(m_buffer, value);
@@ -596,7 +598,7 @@ public:
 
     AssignmentProxy operator[](const std::string_view key)
     {
-        if (erthink_likely(!m_first)) {
+        if (!m_first) {
             m_buffer.append(',');
         }
         m_first = false;
