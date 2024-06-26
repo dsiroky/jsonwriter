@@ -575,13 +575,13 @@ private:
         }
 
         template<typename T>
-        void operator=(T&& value)
+        void operator=(T&& value) const
         {
             jsonwriter::write(m_buffer, std::forward<T>(value));
         }
 
         template<typename T>
-        void operator=(const std::initializer_list<T> list)
+        void operator=(const std::initializer_list<T> list) const
         {
             jsonwriter::write(m_buffer, list);
         }
