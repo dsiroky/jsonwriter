@@ -224,6 +224,166 @@ TEST(TestJsonWriter, Floats)
         jsonwriter::write(out, 3.141592653589793);
         EXPECT_EQ(to_str(out), "3.141592653589793E0");
     }
+
+    // negative zero keeps its sign
+    {
+        jsonwriter::SimpleBuffer out{};
+        jsonwriter::write(out, -0.0);
+        EXPECT_EQ(to_str(out), "-0E0");
+    }
+    {
+        jsonwriter::SimpleBuffer out{};
+        jsonwriter::write(out, -0.0f);
+        EXPECT_EQ(to_str(out), "-0E0");
+    }
+
+    // negative values
+    {
+        jsonwriter::SimpleBuffer out{};
+        jsonwriter::write(out, -1.0);
+        EXPECT_EQ(to_str(out), "-1E0");
+    }
+    {
+        jsonwriter::SimpleBuffer out{};
+        jsonwriter::write(out, -1.0f);
+        EXPECT_EQ(to_str(out), "-1E0");
+    }
+
+    // integral values are written in exponent notation, never with a trailing ".0"
+    {
+        jsonwriter::SimpleBuffer out{};
+        jsonwriter::write(out, 1.0);
+        EXPECT_EQ(to_str(out), "1E0");
+    }
+    {
+        jsonwriter::SimpleBuffer out{};
+        jsonwriter::write(out, 100.0);
+        EXPECT_EQ(to_str(out), "1E2");
+    }
+    {
+        jsonwriter::SimpleBuffer out{};
+        jsonwriter::write(out, 1e15);
+        EXPECT_EQ(to_str(out), "1E15");
+    }
+    {
+        jsonwriter::SimpleBuffer out{};
+        jsonwriter::write(out, 1e16);
+        EXPECT_EQ(to_str(out), "1E16");
+    }
+    {
+        jsonwriter::SimpleBuffer out{};
+        jsonwriter::write(out, 1e21);
+        EXPECT_EQ(to_str(out), "1E21");
+    }
+
+    // shortest representation that round-trips, so 0.3 becomes "3E-1"
+    {
+        jsonwriter::SimpleBuffer out{};
+        jsonwriter::write(out, 0.1);
+        EXPECT_EQ(to_str(out), "1E-1");
+    }
+    {
+        jsonwriter::SimpleBuffer out{};
+        jsonwriter::write(out, 0.3);
+        EXPECT_EQ(to_str(out), "3E-1");
+    }
+    {
+        jsonwriter::SimpleBuffer out{};
+        jsonwriter::write(out, 0.3f);
+        EXPECT_EQ(to_str(out), "3E-1");
+    }
+    {
+        jsonwriter::SimpleBuffer out{};
+        jsonwriter::write(out, 0.30000000000000004);
+        EXPECT_EQ(to_str(out), "3.0000000000000004E-1");
+    }
+    {
+        jsonwriter::SimpleBuffer out{};
+        jsonwriter::write(out, 1.0 / 3.0);
+        EXPECT_EQ(to_str(out), "3.333333333333333E-1");
+    }
+    {
+        jsonwriter::SimpleBuffer out{};
+        jsonwriter::write(out, 1.0f / 3.0f);
+        EXPECT_EQ(to_str(out), "3.3333334E-1");
+    }
+
+    // smallest step above 1.0, the densest part of the exponent range
+    {
+        jsonwriter::SimpleBuffer out{};
+        jsonwriter::write(out, 1.0000000000000002); // nextafter(1.0, 2.0)
+        EXPECT_EQ(to_str(out), "1.0000000000000002E0");
+    }
+    {
+        jsonwriter::SimpleBuffer out{};
+        jsonwriter::write(out, 1.0000001f); // nextafter(1.0f, 2.0f)
+        EXPECT_EQ(to_str(out), "1.0000001E0");
+    }
+
+    // integers beyond the mantissa width are rounded to the nearest representable value
+    {
+        jsonwriter::SimpleBuffer out{};
+        jsonwriter::write(out, 9007199254740993.0); // 2^53 + 1, not representable
+        EXPECT_EQ(to_str(out), "9.007199254740992E15");
+    }
+    {
+        jsonwriter::SimpleBuffer out{};
+        jsonwriter::write(out, 123456790.0f);
+        EXPECT_EQ(to_str(out), "1.2345679E8");
+    }
+
+    // machine epsilon
+    {
+        jsonwriter::SimpleBuffer out{};
+        jsonwriter::write(out, std::numeric_limits<double>::epsilon());
+        EXPECT_EQ(to_str(out), "2.220446049250313E-16");
+    }
+    {
+        jsonwriter::SimpleBuffer out{};
+        jsonwriter::write(out, std::numeric_limits<float>::epsilon());
+        EXPECT_EQ(to_str(out), "1.1920929E-7");
+    }
+
+    // largest finite values
+    {
+        jsonwriter::SimpleBuffer out{};
+        jsonwriter::write(out, std::numeric_limits<double>::max());
+        EXPECT_EQ(to_str(out), "1.7976931348623157E308");
+    }
+    {
+        jsonwriter::SimpleBuffer out{};
+        jsonwriter::write(out, std::numeric_limits<double>::lowest());
+        EXPECT_EQ(to_str(out), "-1.7976931348623157E308");
+    }
+    {
+        jsonwriter::SimpleBuffer out{};
+        jsonwriter::write(out, std::numeric_limits<float>::max());
+        EXPECT_EQ(to_str(out), "3.4028235E38");
+    }
+
+    // smallest normal values
+    {
+        jsonwriter::SimpleBuffer out{};
+        jsonwriter::write(out, std::numeric_limits<double>::min());
+        EXPECT_EQ(to_str(out), "2.2250738585072014E-308");
+    }
+    {
+        jsonwriter::SimpleBuffer out{};
+        jsonwriter::write(out, std::numeric_limits<float>::min());
+        EXPECT_EQ(to_str(out), "1.1754944E-38");
+    }
+
+    // subnormals
+    {
+        jsonwriter::SimpleBuffer out{};
+        jsonwriter::write(out, std::numeric_limits<double>::denorm_min());
+        EXPECT_EQ(to_str(out), "5E-324");
+    }
+    {
+        jsonwriter::SimpleBuffer out{};
+        jsonwriter::write(out, std::numeric_limits<float>::denorm_min());
+        EXPECT_EQ(to_str(out), "1E-45");
+    }
 }
 
 TEST(TestJsonWriter, Bool)
