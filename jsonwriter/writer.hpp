@@ -6,7 +6,9 @@
 #include <any>
 #include <array>
 #include <cstdint>
+#include <cstdlib>
 #include <cstring>
+#include <stdexcept>
 #include <deque>
 #include <forward_list>
 #include <functional>
@@ -42,6 +44,28 @@
 #define JSONWRITER_UNLIKELY [[unlikely]]
 #else
 #define JSONWRITER_UNLIKELY
+#endif
+
+/// What happens when a value JSON cannot represent (infinity, NaN) is
+/// serialized. Define one of the following before including this header to
+/// override the default:
+///
+/// - JSONWRITER_NONFINITE_THROW - throw std::domain_error (the default)
+/// - JSONWRITER_NONFINITE_NULL  - serialize as null
+/// - JSONWRITER_NONFINITE_ABORT - abort the program (useful when building
+///   without exceptions)
+#ifndef JSONWRITER_NONFINITE
+#define JSONWRITER_NONFINITE JSONWRITER_NONFINITE_THROW
+#endif
+
+#define JSONWRITER_NONFINITE_THROW 1
+#define JSONWRITER_NONFINITE_NULL 2
+#define JSONWRITER_NONFINITE_ABORT 3
+
+#if JSONWRITER_NONFINITE != JSONWRITER_NONFINITE_THROW \
+    && JSONWRITER_NONFINITE != JSONWRITER_NONFINITE_NULL \
+    && JSONWRITER_NONFINITE != JSONWRITER_NONFINITE_ABORT
+#error "JSONWRITER_NONFINITE must be JSONWRITER_NONFINITE_THROW, JSONWRITER_NONFINITE_NULL or JSONWRITER_NONFINITE_ABORT"
 #endif
 
 namespace jsonwriter {
@@ -392,10 +416,17 @@ struct FormatterFloat
 {
     static void write(Buffer& buffer, const FloatType value)
     {
-        // JSON has no representation for infinity or NaN, use null instead
+        // JSON has no representation for infinity or NaN, see
+        // JSONWRITER_NONFINITE for the available behaviors
         // clang-format off
         if (!detail::is_finite(value)) JSONWRITER_UNLIKELY {
+#if JSONWRITER_NONFINITE == JSONWRITER_NONFINITE_NULL
             buffer.append("null");
+#elif JSONWRITER_NONFINITE == JSONWRITER_NONFINITE_ABORT
+            std::abort();
+#else
+            throw std::domain_error{"JSON cannot represent infinity or NaN"};
+#endif
             return;
         }
         // clang-format on

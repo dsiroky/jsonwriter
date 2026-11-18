@@ -39,6 +39,35 @@ int main() {
 
 See `test.cpp` for more use cases. For custom formatters look for `jsonwriter::Formatter` or `void write(jsonwriter::Buffer& buffer)` member function.
 
+## Non-finite values
+
+JSON cannot represent infinity or NaN. By default serializing such a value
+throws `std::domain_error`:
+
+```
+jsonwriter::write(out, std::numeric_limits<double>::infinity()); // throws
+```
+
+The behavior is a compile time switch. Define `JSONWRITER_NONFINITE` to one of
+the following before including `jsonwriter/writer.hpp`:
+
+| Value                        | Behavior                                      |
+| ---------------------------- | --------------------------------------------- |
+| `JSONWRITER_NONFINITE_THROW` | throws `std::domain_error` (default)          |
+| `JSONWRITER_NONFINITE_NULL`  | serializes the value as `null`                |
+| `JSONWRITER_NONFINITE_ABORT` | aborts the program (useful when exceptions are disabled) |
+
+```
+#define JSONWRITER_NONFINITE JSONWRITER_NONFINITE_NULL
+#include <jsonwriter/writer.hpp>
+```
+
+Define `JSONWRITER_NONFINITE` consistently in all translation units that
+include the header; mixing settings within one program is an ODR violation.
+
+When the writer throws, the contents of the buffer are unspecified — don't
+keep writing into it or reuse its output.
+
 ## Benchmarks
 
 gcc 11, -O3, Intel Core i7-8700K
