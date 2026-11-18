@@ -384,6 +384,58 @@ TEST(TestJsonWriter, Floats)
         jsonwriter::write(out, std::numeric_limits<float>::denorm_min());
         EXPECT_EQ(to_str(out), "1E-45");
     }
+
+    // JSON cannot represent infinity or NaN, they become null
+    {
+        jsonwriter::SimpleBuffer out{};
+        jsonwriter::write(out, std::numeric_limits<double>::infinity());
+        EXPECT_EQ(to_str(out), "null");
+    }
+    {
+        jsonwriter::SimpleBuffer out{};
+        jsonwriter::write(out, -std::numeric_limits<double>::infinity());
+        EXPECT_EQ(to_str(out), "null");
+    }
+    {
+        jsonwriter::SimpleBuffer out{};
+        jsonwriter::write(out, std::numeric_limits<double>::quiet_NaN());
+        EXPECT_EQ(to_str(out), "null");
+    }
+    {
+        jsonwriter::SimpleBuffer out{};
+        jsonwriter::write(out, -std::numeric_limits<double>::quiet_NaN());
+        EXPECT_EQ(to_str(out), "null");
+    }
+    {
+        jsonwriter::SimpleBuffer out{};
+        jsonwriter::write(out, std::numeric_limits<double>::signaling_NaN());
+        EXPECT_EQ(to_str(out), "null");
+    }
+    {
+        jsonwriter::SimpleBuffer out{};
+        jsonwriter::write(out, std::numeric_limits<float>::infinity());
+        EXPECT_EQ(to_str(out), "null");
+    }
+    {
+        jsonwriter::SimpleBuffer out{};
+        jsonwriter::write(out, -std::numeric_limits<float>::infinity());
+        EXPECT_EQ(to_str(out), "null");
+    }
+    {
+        jsonwriter::SimpleBuffer out{};
+        jsonwriter::write(out, std::numeric_limits<float>::quiet_NaN());
+        EXPECT_EQ(to_str(out), "null");
+    }
+    {
+        jsonwriter::SimpleBuffer out{};
+        jsonwriter::write(out, -std::numeric_limits<float>::quiet_NaN());
+        EXPECT_EQ(to_str(out), "null");
+    }
+    {
+        jsonwriter::SimpleBuffer out{};
+        jsonwriter::write(out, std::numeric_limits<float>::signaling_NaN());
+        EXPECT_EQ(to_str(out), "null");
+    }
 }
 
 TEST(TestJsonWriter, Bool)

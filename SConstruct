@@ -125,7 +125,8 @@ else:
             "-ggdb3",
 
             "-fsigned-char",
-            "-ffast-math",
+            # no -ffast-math: it lets the compiler assume no NaN/Inf and flush
+            # subnormals, so float serialization would not round-trip
             "-fomit-frame-pointer",
             "-fno-rtti",
             "-fvisibility=hidden",

@@ -5,11 +5,13 @@
 #include <algorithm>
 #include <any>
 #include <array>
+#include <cstdint>
 #include <cstring>
 #include <deque>
 #include <forward_list>
 #include <functional>
 #include <initializer_list>
+#include <limits>
 #include <list>
 #include <memory>
 #include <optional>
@@ -32,6 +34,14 @@
 
 #ifndef _MSC_VER
 #pragma GCC diagnostic pop
+#endif
+
+// [[unlikely]] is a C++20 attribute, so it is only used when the language mode
+// provides it.
+#if __cplusplus >= 202002L || (defined(_MSVC_LANG) && _MSVC_LANG >= 202002L)
+#define JSONWRITER_UNLIKELY [[unlikely]]
+#else
+#define JSONWRITER_UNLIKELY
 #endif
 
 namespace jsonwriter {
@@ -346,11 +356,46 @@ struct Formatter<T, typename std::enable_if_t<std::is_integral_v<T>>>
     }
 };
 
+namespace detail {
+
+/// True if the value is neither infinity nor NaN.
+///
+/// Inspecting the bits avoids std::isfinite(), whose result can be constant
+/// folded away by -ffast-math, and works regardless of the rounding mode.
+template<typename FloatType>
+[[nodiscard]] constexpr bool is_finite(const FloatType value) noexcept
+{
+    static_assert(std::is_floating_point_v<FloatType>);
+    static_assert(std::numeric_limits<FloatType>::is_iec559);
+    static_assert(sizeof(FloatType) == sizeof(std::uint32_t)
+                  || sizeof(FloatType) == sizeof(std::uint64_t));
+
+    using UIntType = std::conditional_t<sizeof(FloatType) == sizeof(std::uint32_t), std::uint32_t,
+                                        std::uint64_t>;
+    constexpr auto mantissa_bits = std::numeric_limits<FloatType>::digits - 1;
+    constexpr auto exponent_bits = sizeof(FloatType) * 8 - mantissa_bits - 1;
+    constexpr auto exponent_mask = ((UIntType{1} << exponent_bits) - 1) << mantissa_bits;
+
+    UIntType bits{};
+    std::memcpy(&bits, &value, sizeof(value));
+    return (bits & exponent_mask) != exponent_mask;
+}
+
+} // namespace detail
+
 template<typename FloatType>
 struct FormatterFloat
 {
     static void write(Buffer& buffer, const FloatType value)
     {
+        // JSON has no representation for infinity or NaN, use null instead
+        // clang-format off
+        if (!detail::is_finite(value)) JSONWRITER_UNLIKELY {
+            buffer.append("null");
+            return;
+        }
+        // clang-format on
+
         buffer.make_room(jkj::dragonbox::max_output_string_length<FloatType>);
         const auto end = jkj::dragonbox::to_chars_n(value, buffer.working_end());
         buffer.consume(static_cast<size_t>(end - buffer.working_end()));
@@ -674,5 +719,7 @@ void write(Buffer& buffer, const std::initializer_list<T> value)
 }
 
 } // namespace jsonwriter
+
+#undef JSONWRITER_UNLIKELY
 
 #endif /* include guard */
