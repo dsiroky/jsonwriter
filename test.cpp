@@ -1,3 +1,4 @@
+#include <memory>
 #include <vector>
 
 #include <gtest/gtest.h>
@@ -629,6 +630,40 @@ TEST(TestJsonWriter, Objects)
         jsonwriter::write(out, get_object());
         EXPECT_EQ(to_str(out), "{\"x\":5}");
     }
+}
+
+TEST(TestJsonWriter, ListOutlivesCallbackTemporary)
+{
+    std::weak_ptr<int> lifetime;
+    const auto make_list = [&lifetime] {
+        const auto token = std::make_shared<int>(42);
+        lifetime = token;
+        return jsonwriter::List{[token](auto& list) { list.push_back(*token); }};
+    };
+
+    const auto list = make_list();
+    EXPECT_FALSE(lifetime.expired());
+
+    jsonwriter::SimpleBuffer out{};
+    jsonwriter::write(out, list);
+    EXPECT_EQ(to_str(out), "[42]");
+}
+
+TEST(TestJsonWriter, ObjectOutlivesCallbackTemporary)
+{
+    std::weak_ptr<int> lifetime;
+    const auto make_object = [&lifetime] {
+        const auto token = std::make_shared<int>(42);
+        lifetime = token;
+        return jsonwriter::Object{[token](auto& object) { object["k"] = *token; }};
+    };
+
+    const auto object = make_object();
+    EXPECT_FALSE(lifetime.expired());
+
+    jsonwriter::SimpleBuffer out{};
+    jsonwriter::write(out, object);
+    EXPECT_EQ(to_str(out), "{\"k\":42}");
 }
 
 enum class SomeEnum { RED, GREEN, BLUE };

@@ -546,13 +546,13 @@ public:
                   "the callback must be a callable like `void(ListProxy&)`.");
 #endif
 
-    List(const Callback& callback)
-        : m_callback{callback}
+    List(Callback callback)
+        : m_callback{std::move(callback)}
     {
     }
 
 private:
-    const Callback& m_callback;
+    Callback m_callback;
 
     friend struct Formatter<List<Callback>>;
 };
@@ -666,13 +666,13 @@ public:
                   "the callback must be a callable like `void(ObjectProxy&)`.");
 #endif
 
-    Object(const Callback& callback)
-        : m_callback{callback}
+    Object(Callback callback)
+        : m_callback{std::move(callback)}
     {
     }
 
 private:
-    const Callback& m_callback;
+    Callback m_callback;
 
     friend struct Formatter<Object<Callback>>;
 };
