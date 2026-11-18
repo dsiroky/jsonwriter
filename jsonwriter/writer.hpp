@@ -74,8 +74,12 @@ public:
     Buffer(const Buffer& other) = delete;
     Buffer& operator=(const Buffer& other) = delete;
 
-    Buffer(Buffer&& other) = default;
-    Buffer& operator=(Buffer&& other) = default;
+    // A derived buffer owns its storage, so the base cannot provide correct move
+    // semantics: a defaulted move would only copy the pointers and leave two
+    // objects referring to the same storage. Derived classes must implement
+    // their own move operations (see SimpleBuffer).
+    Buffer(Buffer&& other) = delete;
+    Buffer& operator=(Buffer&& other) = delete;
 
     char* begin() noexcept { return m_ptr; }
     char* end() noexcept { return m_working_end; }
