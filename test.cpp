@@ -1,4 +1,5 @@
 #include <memory>
+#include <type_traits>
 #include <vector>
 
 #include <gtest/gtest.h>
@@ -20,6 +21,9 @@ static std::vector<char> long_data{std::invoke([]() {
     }
     return v;
 })};
+
+static_assert(std::is_nothrow_move_constructible_v<jsonwriter::SimpleBuffer<>>);
+static_assert(std::is_nothrow_move_assignable_v<jsonwriter::SimpleBuffer<>>);
 
 //==========================================================================
 
@@ -85,6 +89,48 @@ TEST(TestJsonBuffer, Move)
             // this should be undefined, nullptr test is a white box test
             EXPECT_TRUE(orig.begin() == nullptr);
         }
+    }
+}
+
+TEST(TestJsonBuffer, MoveDynamic)
+{
+    const auto data = std::string_view{long_data.data(), long_data.size()};
+
+    // move construction transfers the dynamic storage
+    {
+        jsonwriter::SimpleBuffer orig{};
+        orig.make_room(data.size());
+        orig.consume(std::copy_n(data.begin(), data.size(), orig.working_end()));
+
+        jsonwriter::SimpleBuffer newbuf{std::move(orig)};
+        EXPECT_EQ((std::string_view{newbuf.data(), newbuf.size()}), data);
+
+        // this should be undefined, nullptr test is a white box test
+        EXPECT_TRUE(orig.begin() == nullptr);
+    }
+
+    // move assignment of a static buffer into a grown buffer
+    {
+        jsonwriter::SimpleBuffer orig{};
+        orig.make_room(10);
+        orig.consume(std::copy_n(long_data.begin(), 10, orig.working_end()));
+
+        jsonwriter::SimpleBuffer newbuf{};
+        newbuf.make_room(data.size());
+        newbuf.consume(std::copy_n(data.begin(), data.size(), newbuf.working_end()));
+
+        newbuf = std::move(orig);
+        EXPECT_EQ((std::string_view{newbuf.data(), newbuf.size()}),
+                  (std::string_view{long_data.data(), 10}));
+
+        // this should be undefined, nullptr test is a white box test
+        EXPECT_TRUE(orig.begin() == nullptr);
+
+        // the destination must still be growable after the move
+        newbuf.make_room(data.size());
+        newbuf.consume(std::copy_n(data.begin(), data.size(), newbuf.working_end()));
+        EXPECT_EQ(newbuf.size(), 10 + data.size());
+        EXPECT_EQ((std::string_view{newbuf.data() + 10, data.size()}), data);
     }
 }
 

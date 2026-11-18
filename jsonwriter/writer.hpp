@@ -157,14 +157,21 @@ protected:
     /// is exhausted.
     virtual void realloc(size_t data_size, size_t new_capacity) = 0;
 
-    /// Must be called by the derived class on every data pointer change:
+    /// Must be called by the derived class on every growing data pointer
+    /// change:
     /// * construction
-    /// * move construction/assignment
     /// * realloc
-    void set_data(char* ptr, size_t size, size_t capacity)
+    void set_data(char* ptr, size_t size, size_t capacity) noexcept
     {
         assert(capacity >= m_capacity);
+        reset_data(ptr, size, capacity);
+    }
 
+    /// Same as set_data(), but allows the capacity to shrink. It must be used
+    /// for move construction/assignment and for resetting a moved-from
+    /// instance.
+    void reset_data(char* ptr, size_t size, size_t capacity) noexcept
+    {
         m_ptr = ptr;
         m_working_end = ptr + size;
         m_capacity = capacity;
@@ -182,10 +189,10 @@ template<size_t INITIAL_FIXED_CAPACITY = 1024>
 class SimpleBuffer : public Buffer
 {
 public:
-    explicit SimpleBuffer() { set_data(m_ptr, 0, m_capacity); }
+    explicit SimpleBuffer() { set_data(m_static.data(), 0, m_static.size()); }
 
-    SimpleBuffer(SimpleBuffer&& other) { move_from(std::move(other)); }
-    SimpleBuffer& operator=(SimpleBuffer&& other)
+    SimpleBuffer(SimpleBuffer&& other) noexcept { move_from(std::move(other)); }
+    SimpleBuffer& operator=(SimpleBuffer&& other) noexcept
     {
         move_from(std::move(other));
         return *this;
@@ -193,48 +200,41 @@ public:
 
     void realloc(const size_t data_size, const size_t new_capacity) override
     {
-        // should be only growing
-        assert(new_capacity >= m_capacity);
+        // Buffer::reserve() calls this only when the current capacity is
+        // exhausted, so the new capacity is always larger.
+        assert(new_capacity > capacity());
 
-        // still fits in the static buffer
-        if (new_capacity <= INITIAL_FIXED_CAPACITY) {
-            return;
-        }
-
-        const auto bulk_new_capacity = std::max(new_capacity, m_capacity + m_capacity / 2);
+        const auto bulk_new_capacity = std::max(new_capacity, capacity() + capacity() / 2);
         auto new_dynamic = Dynamic{new char[bulk_new_capacity]};
-        assert(m_ptr != nullptr);
-        ::memcpy(new_dynamic.get(), m_ptr, data_size);
+        assert(begin() != nullptr);
+        ::memcpy(new_dynamic.get(), begin(), data_size);
 
         m_dynamic = std::move(new_dynamic);
-        m_ptr = m_dynamic.get();
-        m_capacity = bulk_new_capacity;
-
-        set_data(m_ptr, data_size, m_capacity);
+        set_data(m_dynamic.get(), data_size, bulk_new_capacity);
     }
 
 private:
-    void move_from(SimpleBuffer&& other)
+    void move_from(SimpleBuffer&& other) noexcept
     {
         if (&other != this) {
             context = std::move(other.context);
 
             const auto old_size = other.size();
 
-            if (other.m_ptr == other.m_static.data()) {
-                m_static = other.m_static;
-                m_ptr = m_static.data();
+            if (other.begin() == other.m_static.data()) {
+                // only the used prefix is meaningful; the rest is uninitialized
+                if (old_size > 0) {
+                    ::memcpy(m_static.data(), other.m_static.data(), old_size);
+                }
+                m_dynamic.reset();
+                reset_data(m_static.data(), old_size, m_static.size());
             } else {
+                const auto old_capacity = other.capacity();
                 m_dynamic = std::move(other.m_dynamic);
-                m_ptr = m_dynamic.get();
+                reset_data(m_dynamic.get(), old_size, old_capacity);
             }
-            m_capacity = other.m_capacity;
 
-            other.~SimpleBuffer();
-            new (&other) SimpleBuffer{};
-
-            set_data(m_ptr, old_size, m_capacity);
-            other.set_data(nullptr, 0, m_capacity);
+            other.reset_data(nullptr, 0, 0);
         }
     }
 
@@ -242,8 +242,6 @@ private:
 
     std::array<char, INITIAL_FIXED_CAPACITY> m_static;
     Dynamic m_dynamic{};
-    char* m_ptr{m_static.data()};
-    size_t m_capacity{m_static.size()};
 };
 
 template<typename T>
