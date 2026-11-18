@@ -145,7 +145,17 @@ else:
         env.AppendUnique(CCFLAGS=["-fmax-errors=5", ])
 
     if env["OPTIMIZATION"] == "none":
-        env.AppendUnique(CCFLAGS=["-O0"])
+        env.AppendUnique(
+            CCFLAGS=["-O0"],
+            # sanitizer build: catches bugs during unoptimized debugging
+            LINKFLAGS=["-fsanitize=address,undefined"],
+            )
+        env.AppendUnique(
+            CCFLAGS=[
+                "-fsanitize=address,undefined",
+                "-fno-sanitize-recover=undefined",
+                ],
+            )
     elif env["OPTIMIZATION"] == "devel":
         env.AppendUnique(CCFLAGS=["-Og"])
     elif env["OPTIMIZATION"] == "full":
