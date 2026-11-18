@@ -88,6 +88,29 @@ TEST(TestJsonBuffer, Move)
     }
 }
 
+TEST(TestJsonBuffer, MoveConstructionPreservesContext)
+{
+    jsonwriter::SimpleBuffer orig{};
+    orig.context = std::string{"hello"};
+
+    jsonwriter::SimpleBuffer newbuf{std::move(orig)};
+
+    ASSERT_TRUE(newbuf.context.has_value());
+    EXPECT_EQ(std::any_cast<std::string>(newbuf.context), "hello");
+}
+
+TEST(TestJsonBuffer, MoveAssignmentPreservesContext)
+{
+    jsonwriter::SimpleBuffer orig{};
+    orig.context = std::string{"hello"};
+    jsonwriter::SimpleBuffer newbuf{};
+
+    newbuf = std::move(orig);
+
+    ASSERT_TRUE(newbuf.context.has_value());
+    EXPECT_EQ(std::any_cast<std::string>(newbuf.context), "hello");
+}
+
 TEST(TestJsonBuffer, Clear)
 {
     jsonwriter::SimpleBuffer out{};

@@ -217,6 +217,8 @@ private:
     void move_from(SimpleBuffer&& other)
     {
         if (&other != this) {
+            context = std::move(other.context);
+
             const auto old_size = other.size();
 
             if (other.m_ptr == other.m_static.data()) {
