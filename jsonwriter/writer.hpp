@@ -491,6 +491,29 @@ template<typename FloatType>
     return (bits & exponent_mask) != exponent_mask;
 }
 
+/// Writes a floating point value without checking the remaining room. The
+/// caller must provide max_output_string_length<FloatType> bytes.
+template<typename FloatType>
+inline char* write_float_no_grow(char* const out, const FloatType value)
+{
+    // JSON has no representation for infinity or NaN, see
+    // JSONWRITER_NONFINITE for the available behaviors
+    // clang-format off
+    if (!is_finite(value)) JSONWRITER_UNLIKELY {
+#if JSONWRITER_NONFINITE == JSONWRITER_NONFINITE_NULL
+        std::memcpy(out, "null", 4);
+        return out + 4;
+#elif JSONWRITER_NONFINITE == JSONWRITER_NONFINITE_ABORT
+        std::abort();
+#else
+        throw std::domain_error{"JSON cannot represent infinity or NaN"};
+#endif
+    }
+    // clang-format on
+
+    return jkj::dragonbox::to_chars_n(value, out);
+}
+
 } // namespace detail
 
 template<typename FloatType>
@@ -498,24 +521,8 @@ struct FormatterFloat
 {
     static void write(Buffer& buffer, const FloatType value)
     {
-        // JSON has no representation for infinity or NaN, see
-        // JSONWRITER_NONFINITE for the available behaviors
-        // clang-format off
-        if (!detail::is_finite(value)) JSONWRITER_UNLIKELY {
-#if JSONWRITER_NONFINITE == JSONWRITER_NONFINITE_NULL
-            buffer.append("null");
-#elif JSONWRITER_NONFINITE == JSONWRITER_NONFINITE_ABORT
-            std::abort();
-#else
-            throw std::domain_error{"JSON cannot represent infinity or NaN"};
-#endif
-            return;
-        }
-        // clang-format on
-
         buffer.make_room(jkj::dragonbox::max_output_string_length<FloatType>);
-        const auto end = jkj::dragonbox::to_chars_n(value, buffer.working_end());
-        buffer.consume(static_cast<size_t>(end - buffer.working_end()));
+        buffer.consume(detail::write_float_no_grow(buffer.working_end(), value));
     }
 };
 
@@ -688,10 +695,76 @@ struct Formatter<List<Callback>>
     }
 };
 
+namespace detail {
+
+/// True for element types that have a native numeric formatter with a small
+/// compile time output width. Enums are excluded: users may specialize
+/// Formatter for them. char is excluded because it serializes as a string.
+template<typename T>
+inline constexpr bool is_scalar_list_element =
+    (std::is_integral_v<T> || std::is_same_v<T, float> || std::is_same_v<T, double>)
+    && !std::is_same_v<T, char>;
+
+/// Maximum number of characters the JSON representation of a scalar list
+/// element occupies.
+template<typename T>
+constexpr size_t scalar_list_width() noexcept
+{
+    if constexpr (std::is_same_v<T, bool>) {
+        return 5; // false
+    } else if constexpr (std::is_floating_point_v<T>) {
+        return jkj::dragonbox::max_output_string_length<T>;
+    } else {
+        // int64_t range, including the sign of the most negative value
+        return 20;
+    }
+}
+
+/// Writes one scalar value without checking the remaining room. The caller
+/// must provide scalar_list_width<T>() bytes.
+template<typename T>
+inline char* write_scalar_no_grow(char* const out, const T value)
+{
+    static_assert(is_scalar_list_element<T>);
+
+    if constexpr (std::is_same_v<T, bool>) {
+        if (value) {
+            std::memcpy(out, "true", 4);
+            return out + 4;
+        }
+        std::memcpy(out, "false", 5);
+        return out + 5;
+    } else if constexpr (std::is_floating_point_v<T>) {
+        return write_float_no_grow(out, value);
+    } else {
+        FormatInt format_int{};
+        const auto str = format_int.itostr(value);
+        std::memcpy(out, str.data(), str.size());
+        return out + str.size();
+    }
+}
+
+} // namespace detail
+
 struct FormatterList
 {
     template<typename Container>
     static void write(Buffer& buffer, const Container& container)
+    {
+        using T = typename Container::value_type;
+
+        if constexpr (detail::is_scalar_list_element<T>) {
+            write_scalars(buffer, container);
+        } else {
+            write_generic(buffer, container);
+        }
+    }
+
+private:
+    static constexpr size_t SCALAR_CHUNK_ELEMENTS{256};
+
+    template<typename Container>
+    static void write_generic(Buffer& buffer, const Container& container)
     {
         buffer.append('[');
         auto it = container.begin();
@@ -703,6 +776,50 @@ struct FormatterList
             buffer.append(',');
             jsonwriter::write(buffer, *it);
         }
+        buffer.append(']');
+    }
+
+    template<typename Container>
+    static void write_scalars(Buffer& buffer, const Container& container)
+    {
+        using T = typename Container::value_type;
+
+        // Worst case: a separator and a value for every element.
+        constexpr size_t CHUNK_BYTES =
+            SCALAR_CHUNK_ELEMENTS * (detail::scalar_list_width<T>() + 1);
+
+        buffer.append('[');
+
+        bool first{true};
+        size_t chunk_count{0};
+        char* out{nullptr};
+
+        // Hoist end(): the char stores through `out` may alias the container,
+        // so calling end() in the loop condition would reload it every element.
+        const auto end = container.end();
+        for (auto it = container.begin(); it != end; ++it) {
+            if (chunk_count == 0) {
+                buffer.make_room(CHUNK_BYTES);
+                out = buffer.working_end();
+            }
+
+            if (!first) {
+                *out++ = ',';
+            }
+
+            out = detail::write_scalar_no_grow(out, static_cast<T>(*it));
+            first = false;
+
+            if (++chunk_count == SCALAR_CHUNK_ELEMENTS) {
+                buffer.consume(out);
+                chunk_count = 0;
+            }
+        }
+
+        if (chunk_count != 0) {
+            buffer.consume(out);
+        }
+
         buffer.append(']');
     }
 };

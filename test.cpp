@@ -3,6 +3,7 @@
 #include <memory>
 #include <random>
 #include <stdexcept>
+#include <string>
 #include <type_traits>
 #include <vector>
 
@@ -812,6 +813,76 @@ TEST(TestJsonWriter, ListLikeContainers)
         jsonwriter::write(out, std::list<int>{33, 44, 999});
         EXPECT_EQ(to_str(out), "[33,44,999]");
     }
+}
+
+TEST(TestJsonWriter, ScalarListChunkBoundaries)
+{
+    const auto expected = [](const size_t count) {
+        std::string s{"["};
+        for (size_t i{0}; i < count; ++i) {
+            if (i != 0) {
+                s += ',';
+            }
+            s += std::to_string(i);
+        }
+        s += ']';
+        return s;
+    };
+
+    for (const size_t count : {0u, 1u, 255u, 256u, 257u, 1000u}) {
+        std::vector<int> values(count);
+        for (size_t i{0}; i < count; ++i) {
+            values[i] = static_cast<int>(i);
+        }
+
+        jsonwriter::SimpleBuffer out{};
+        jsonwriter::write(out, values);
+        EXPECT_EQ(to_str(out), expected(count)) << "count=" << count;
+    }
+}
+
+TEST(TestJsonWriter, ScalarListValues)
+{
+    {
+        jsonwriter::SimpleBuffer out{};
+        jsonwriter::write(out, std::vector<bool>{true, false, true});
+        EXPECT_EQ(to_str(out), "[true,false,true]");
+    }
+    {
+        jsonwriter::SimpleBuffer out{};
+        jsonwriter::write(out, std::vector<double>{1.5, -2.25});
+        EXPECT_EQ(to_str(out), "[1.5E0,-2.25E0]");
+    }
+    {
+        jsonwriter::SimpleBuffer out{};
+        jsonwriter::write(out, std::array<float, 2>{{0.5f, 3.5f}});
+        EXPECT_EQ(to_str(out), "[5E-1,3.5E0]");
+    }
+    {
+        jsonwriter::SimpleBuffer out{};
+        jsonwriter::write(out, std::list<unsigned>{1, 2});
+        EXPECT_EQ(to_str(out), "[1,2]");
+    }
+    {
+        // char keeps its string semantics and must not take the numeric path
+        jsonwriter::SimpleBuffer out{};
+        jsonwriter::write(out, std::vector<char>{'a', 'b'});
+        EXPECT_EQ(to_str(out), "[\"a\",\"b\"]");
+    }
+}
+
+TEST(TestJsonWriter, ScalarListNonFinite)
+{
+    const std::vector<double> values{1.0, std::numeric_limits<double>::infinity(), 2.0};
+    jsonwriter::SimpleBuffer out{};
+#if JSONWRITER_NONFINITE == JSONWRITER_NONFINITE_NULL
+    jsonwriter::write(out, values);
+    EXPECT_EQ(to_str(out), "[1E0,null,2E0]");
+#elif JSONWRITER_NONFINITE == JSONWRITER_NONFINITE_ABORT
+    EXPECT_DEATH(jsonwriter::write(out, values), "");
+#else
+    EXPECT_THROW(jsonwriter::write(out, values), std::domain_error);
+#endif
 }
 
 TEST(TestJsonWriter, List)
