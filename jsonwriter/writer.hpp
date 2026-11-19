@@ -57,6 +57,16 @@
 #define JSONWRITER_UNLIKELY
 #endif
 
+// Per-element helpers must be inlined: an out-of-line call per value would
+// dominate the cost of formatting small integers.
+#if defined(_MSC_VER)
+#define JSONWRITER_DETAIL_ALWAYS_INLINE __forceinline
+#elif defined(__GNUC__) || defined(__clang__)
+#define JSONWRITER_DETAIL_ALWAYS_INLINE inline __attribute__((always_inline))
+#else
+#define JSONWRITER_DETAIL_ALWAYS_INLINE inline
+#endif
+
 /// What happens when a value JSON cannot represent (infinity, NaN) is
 /// serialized. Define one of the following before including this header to
 /// override the default:
@@ -443,6 +453,14 @@ public:
     static const bool value = type::value;
 };
 
+/// Writes an integer value without checking the remaining room. The caller must
+/// provide std::numeric_limits<T>::digits10 + 2 bytes.
+template<typename T>
+JSONWRITER_DETAIL_ALWAYS_INLINE char* write_integer_no_grow(char* const out, const T value) noexcept
+{
+    return FormatInt::itostr_to(out, value);
+}
+
 } // namespace detail
 
 /// Similar to fmt::formatter. Specialize the template for custom types.
@@ -459,10 +477,8 @@ struct Formatter<T, typename std::enable_if_t<std::is_integral_v<T>>>
     static void write(Buffer& buffer, const T value)
     {
         static_assert(std::is_integral_v<T>);
-        FormatInt format_int{};
-        const auto str = format_int.itostr(value);
-        buffer.make_room(str.size());
-        buffer.consume(std::copy_n(str.data(), str.size(), buffer.working_end()));
+        buffer.make_room(std::numeric_limits<T>::digits10 + 2);
+        buffer.consume(detail::write_integer_no_grow(buffer.working_end(), value));
     }
 };
 
@@ -723,7 +739,7 @@ constexpr size_t scalar_list_width() noexcept
 /// Writes one scalar value without checking the remaining room. The caller
 /// must provide scalar_list_width<T>() bytes.
 template<typename T>
-inline char* write_scalar_no_grow(char* const out, const T value)
+JSONWRITER_DETAIL_ALWAYS_INLINE char* write_scalar_no_grow(char* const out, const T value)
 {
     static_assert(is_scalar_list_element<T>);
 
@@ -737,10 +753,7 @@ inline char* write_scalar_no_grow(char* const out, const T value)
     } else if constexpr (std::is_floating_point_v<T>) {
         return write_float_no_grow(out, value);
     } else {
-        FormatInt format_int{};
-        const auto str = format_int.itostr(value);
-        std::memcpy(out, str.data(), str.size());
-        return out + str.size();
+        return write_integer_no_grow(out, value);
     }
 }
 
@@ -957,6 +970,7 @@ void write(Buffer& buffer, const std::initializer_list<T> value)
 } // namespace jsonwriter
 
 #undef JSONWRITER_UNLIKELY
+#undef JSONWRITER_DETAIL_ALWAYS_INLINE
 #undef JSONWRITER_DETAIL_SSE2
 #undef JSONWRITER_DETAIL_NEON
 

@@ -227,6 +227,31 @@ TEST(TestJsonWriter, Integers)
         EXPECT_EQ(to_str(out), "-9223372036854775808");
     }
 
+    // Values around digit-count boundaries exercise every output length.
+    const auto g = [](auto value, const char* expected) {
+        jsonwriter::SimpleBuffer out{};
+        jsonwriter::write(out, value);
+        EXPECT_EQ(to_str(out), expected);
+    };
+    g(int64_t{1}, "1");
+    g(int64_t{-1}, "-1");
+    g(int64_t{9}, "9");
+    g(int64_t{10}, "10");
+    g(int64_t{-9}, "-9");
+    g(int64_t{-10}, "-10");
+    g(int64_t{99}, "99");
+    g(int64_t{100}, "100");
+    g(int64_t{999999999999999999}, "999999999999999999");
+    g(int64_t{-999999999999999999}, "-999999999999999999");
+    g(std::numeric_limits<int32_t>::min(), "-2147483648");
+    g(std::numeric_limits<uint32_t>::max(), "4294967295");
+
+    {
+        jsonwriter::FormatInt format_int{};
+        const auto str = format_int.itostr(std::numeric_limits<int64_t>::min());
+        EXPECT_EQ(std::string{str}, "-9223372036854775808");
+    }
+
     const auto f = [](auto value) {
         jsonwriter::SimpleBuffer out{};
         jsonwriter::write(out, value);
