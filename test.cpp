@@ -1,5 +1,7 @@
+#include <cstring>
 #include <limits>
 #include <memory>
+#include <random>
 #include <stdexcept>
 #include <type_traits>
 #include <vector>
@@ -495,6 +497,101 @@ TEST(TestJsonWriter, Bool)
     }
 }
 
+/// Independent reference implementation of the string escaping rules: quote,
+/// backslash and control characters are escaped, everything else is copied.
+static std::string to_json_string(const std::string_view raw)
+{
+    std::string out{"\""};
+    for (const char ch : raw) {
+        const auto c = static_cast<unsigned char>(ch);
+        switch (c) {
+            case '"':
+                out += "\\\"";
+                break;
+            case '\\':
+                out += "\\\\";
+                break;
+            case '\b':
+                out += "\\b";
+                break;
+            case '\f':
+                out += "\\f";
+                break;
+            case '\n':
+                out += "\\n";
+                break;
+            case '\r':
+                out += "\\r";
+                break;
+            case '\t':
+                out += "\\t";
+                break;
+            default:
+                if (c < 0x20) {
+                    constexpr char hex_digits[] = "0123456789abcdef";
+                    out += "\\u00";
+                    out += hex_digits[(c >> 4) & 0xf];
+                    out += hex_digits[c & 0xf];
+                } else {
+                    out += ch;
+                }
+        }
+    }
+    out += '"';
+    return out;
+}
+
+/// Buffer that allocates a sentinel filled guard band after its capacity, so a
+/// write past the end of the reserved space is detectable without sanitizers.
+class GuardedBuffer : public jsonwriter::Buffer
+{
+public:
+    GuardedBuffer() { realloc(0, 8); }
+
+    /// False if anything wrote past begin() + capacity(), now or before a
+    /// reallocation.
+    [[nodiscard]] bool ok() const noexcept { return !m_guard_violated && guard_intact(); }
+
+protected:
+    void realloc(const size_t data_size, const size_t new_capacity) override
+    {
+        // Catch an overrun of the storage that is about to be released.
+        if (!guard_intact()) {
+            m_guard_violated = true;
+        }
+
+        auto storage = std::make_unique<char[]>(new_capacity + GUARD_SIZE);
+        ::memset(storage.get() + new_capacity, GUARD_BYTE, GUARD_SIZE);
+        if (data_size > 0) {
+            ::memcpy(storage.get(), begin(), data_size);
+        }
+
+        m_storage = std::move(storage);
+        set_data(m_storage.get(), data_size, new_capacity);
+    }
+
+private:
+    static constexpr size_t GUARD_SIZE{16};
+    static constexpr unsigned char GUARD_BYTE{0xA5};
+
+    [[nodiscard]] bool guard_intact() const noexcept
+    {
+        if (!m_storage) {
+            return true;
+        }
+        for (size_t i{0}; i < GUARD_SIZE; ++i) {
+            const auto byte = static_cast<unsigned char>(m_storage[capacity() + i]);
+            if (byte != GUARD_BYTE) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    std::unique_ptr<char[]> m_storage;
+    bool m_guard_violated{false};
+};
+
 TEST(TestJsonWriter, Strings)
 {
     {
@@ -507,6 +604,102 @@ TEST(TestJsonWriter, Strings)
         jsonwriter::write(out, "ab\"\t\f\r\n\b\\de\x01\x1f ř\xff漢語zzz");
         EXPECT_EQ(to_str(out), "\"ab\\\"\\t\\f\\r\\n\\b\\\\de\\u0001\\u001f ř\xff漢語zzz\"");
     }
+}
+
+TEST(TestJsonWriter, StringsEscapingBoundaries)
+{
+    // Strings are written in fixed size bulk blocks (64 characters), so put a
+    // two byte and a six byte escape around every block boundary and at the
+    // very end of the input.
+    constexpr size_t lengths[] = {1, 15, 16, 17, 63, 64, 65, 127, 128, 129};
+    constexpr char escaped_chars[] = {'"', '\x01'};
+
+    {
+        jsonwriter::SimpleBuffer out{};
+        jsonwriter::write(out, std::string_view{});
+        EXPECT_EQ(to_str(out), "\"\"");
+    }
+
+    for (const size_t len : lengths) {
+        for (const char escaped : escaped_chars) {
+            for (const size_t escape_pos : {size_t{0}, len / 2, len - 1}) {
+                std::string raw(len, 'x');
+                raw[escape_pos] = escaped;
+
+                jsonwriter::SimpleBuffer out{};
+                jsonwriter::write(out, std::string_view{raw});
+                EXPECT_EQ(to_str(out), to_json_string(raw))
+                    << "len=" << len << " char=" << static_cast<int>(escaped)
+                    << " escape_pos=" << escape_pos;
+            }
+        }
+    }
+}
+
+TEST(TestJsonWriter, StringsEscapingAllBytes)
+{
+    // Includes the embedded NUL, the remaining control characters, ASCII and
+    // bytes >= 0x80, which must be copied through unmodified.
+    std::string raw;
+    for (int i{0}; i < 256; ++i) {
+        raw.push_back(static_cast<char>(i));
+    }
+
+    jsonwriter::SimpleBuffer out{};
+    jsonwriter::write(out, std::string_view{raw});
+    EXPECT_EQ(to_str(out), to_json_string(raw));
+}
+
+TEST(TestJsonWriter, StringsEscapingWorstCaseBulk)
+{
+    // '\x01' always expands to the six byte `\u0001`, so a full bulk of 64 of
+    // them is the widest write the formatter can make: the last escape starts
+    // at 63 * 6 and the word sized copy adds EscapeMaps::MAX_LEN bytes.
+    for (const size_t len : {size_t{64}, size_t{65}, size_t{128}, size_t{192}}) {
+        const std::string raw(len, '\x01');
+
+        GuardedBuffer out{};
+        jsonwriter::write(out, std::string_view{raw});
+        EXPECT_EQ(to_str(out), to_json_string(raw)) << "len=" << len;
+        EXPECT_TRUE(out.ok()) << "len=" << len;
+    }
+}
+
+TEST(TestJsonWriter, StringsEscapingRandom)
+{
+    // Differential test against the independent reference implementation, with
+    // lengths that cross bulk boundaries and a deterministic random seed.
+    std::mt19937 engine{12345};
+    std::uniform_int_distribution<int> byte_dist{0, 255};
+    std::uniform_int_distribution<size_t> len_dist{0, 300};
+
+    for (int iteration{0}; iteration < 200; ++iteration) {
+        std::string raw(len_dist(engine), '\0');
+        for (auto& ch : raw) {
+            ch = static_cast<char>(byte_dist(engine));
+        }
+
+        jsonwriter::SimpleBuffer<8> out{};
+        jsonwriter::write(out, std::string_view{raw});
+        ASSERT_EQ(to_str(out), to_json_string(raw)) << "iteration=" << iteration;
+    }
+}
+
+TEST(TestJsonWriter, StringsEscapingSmallBuffer)
+{
+    // Force several reallocations while writing escaped data, then keep using
+    // the same buffer.
+    std::string raw;
+    for (int i{0}; i < 300; ++i) {
+        raw.push_back(static_cast<char>(i % 0x20));
+    }
+
+    jsonwriter::SimpleBuffer<8> out{};
+    jsonwriter::write(out, std::string_view{raw});
+    EXPECT_EQ(to_str(out), to_json_string(raw));
+
+    jsonwriter::write(out, "a\tb");
+    EXPECT_EQ(to_str(out), to_json_string(raw) + to_json_string("a\tb"));
 }
 
 TEST(TestJsonWriter, Optional)

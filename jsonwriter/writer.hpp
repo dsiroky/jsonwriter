@@ -279,8 +279,11 @@ struct EscapeMaps
     static constexpr size_t SIZE{256};
     // Allow the compiler to copy characters as 8 byte words.
     static constexpr size_t MAX_LEN{8};
+    // Longest escape sequence is `\u00XX`.
+    static constexpr size_t MAX_ESCAPE_LEN{6};
 
-    std::array<bool, SIZE> is_escaped{};
+    // Every character maps to its output sequence and its length. Characters
+    // that need no escaping map to themselves with a length of one.
     std::array<std::pair<std::array<char, MAX_LEN>, uint8_t>, SIZE> char_map{};
 
     constexpr EscapeMaps()
@@ -291,10 +294,7 @@ struct EscapeMaps
                     char_map[i].first[ofs] = source[ofs];
                 }
                 char_map[i].second = static_cast<uint8_t>(count);
-                is_escaped[i] = true;
             };
-
-            is_escaped[i] = false;
 
             switch (static_cast<char>(i)) {
                 case '"':
@@ -328,8 +328,7 @@ struct EscapeMaps
                         char_map[i].first[3] = '0';
                         char_map[i].first[4] = hex_digits[(i & 0xf0) >> 4];
                         char_map[i].first[5] = hex_digits[i & 0xf];
-                        char_map[i].second = 6;
-                        is_escaped[i] = true;
+                        char_map[i].second = MAX_ESCAPE_LEN;
                     } else {
                         char_map[i].first[0] = static_cast<char>(i);
                         char_map[i].second = 1;
@@ -462,30 +461,38 @@ struct Formatter<std::string_view>
 {
     static void write(Buffer& buffer, const std::string_view value)
     {
+        static constexpr size_t BULK{64};
+
         // for two '"'
         buffer.make_room(2);
         buffer.append_no_grow('"');
 
-        auto it = value.begin();
-        while (it != value.end()) {
-            static constexpr size_t BULK{64};
+        const char* it = value.data();
+        const char* const end = it + value.size();
+        while (it != end) {
+            const size_t bulk_size = std::min(BULK, static_cast<size_t>(end - it));
 
-            // enough room for all characters to be `\uXXXX` and a terminating '"'
-            buffer.make_room(std::max(BULK * detail::EscapeMaps::MAX_LEN + 1, buffer.room()));
+            // Worst case output is EscapeMaps::MAX_ESCAPE_LEN characters per
+            // input character. The extra EscapeMaps::MAX_LEN bytes are needed
+            // because the escape sequences are copied as word-sized chunks that
+            // can overwrite the logical end. They also guarantee room for the
+            // terminating '"'.
+            buffer.make_room(BULK * detail::EscapeMaps::MAX_ESCAPE_LEN
+                             + detail::EscapeMaps::MAX_LEN);
 
-            const size_t bulk_size = std::min(BULK, static_cast<size_t>(value.end() - it));
-            for (size_t i{0}; i < bulk_size; ++i, ++it) {
-                const char c = *it;
-                const auto char_index = static_cast<uint8_t>(c);
-                if (detail::escape_maps.is_escaped[char_index]) {
-                    const auto& [replacement, len] = detail::escape_maps.char_map[char_index];
-                    std::copy_n(replacement.begin(), detail::EscapeMaps::MAX_LEN,
-                                buffer.working_end());
-                    buffer.consume(len);
-                } else {
-                    buffer.append_no_grow(c);
-                }
+            // Write through a local pointer and commit it once per bulk so the
+            // compiler can keep the pointer in a register: a char store may
+            // alias the Buffer's pointer member.
+            char* out = buffer.working_end();
+            for (size_t i{0}; i < bulk_size; ++i) {
+                const auto& [replacement, len]
+                    = detail::escape_maps.char_map[static_cast<uint8_t>(it[i])];
+                std::copy_n(replacement.begin(), detail::EscapeMaps::MAX_LEN, out);
+                out += len;
             }
+
+            it += bulk_size;
+            buffer.consume(out);
         }
 
         buffer.append_no_grow('"');
