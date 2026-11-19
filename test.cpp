@@ -606,6 +606,22 @@ TEST(TestJsonWriter, Strings)
     }
 }
 
+TEST(TestJsonWriter, StringEscapeEveryPosition)
+{
+    // One escape at every offset of a string spanning several bulk blocks, so
+    // each scalar tail and SIMD block position is covered deterministically.
+    for (const char escaped : {'"', '\\', '\x01'}) {
+        for (size_t pos{0}; pos < 80; ++pos) {
+            std::string raw(80, 'x');
+            raw[pos] = escaped;
+
+            jsonwriter::SimpleBuffer out{};
+            jsonwriter::write(out, raw);
+            EXPECT_EQ(to_str(out), to_json_string(raw)) << "pos=" << pos;
+        }
+    }
+}
+
 TEST(TestJsonWriter, StringsEscapingBoundaries)
 {
     // Strings are written in fixed size bulk blocks (64 characters), so put a

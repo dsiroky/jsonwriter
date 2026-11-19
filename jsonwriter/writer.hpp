@@ -38,6 +38,17 @@
 #pragma GCC diagnostic pop
 #endif
 
+// 16 byte blocks are scanned for characters that need escaping and copied in
+// one go when there are none. Both backends are optional; the scalar path stays
+// as a portable fallback.
+#if defined(__SSE2__) || defined(_M_X64) || (defined(_M_IX86_FP) && _M_IX86_FP >= 2)
+#define JSONWRITER_DETAIL_SSE2 1
+#include <emmintrin.h>
+#elif defined(_M_ARM64) || (defined(__aarch64__) && defined(__ARM_NEON))
+#define JSONWRITER_DETAIL_NEON 1
+#include <arm_neon.h>
+#endif
+
 // [[unlikely]] is a C++20 attribute, so it is only used when the language mode
 // provides it.
 #if __cplusplus >= 202002L || (defined(_MSVC_LANG) && _MSVC_LANG >= 202002L)
@@ -340,6 +351,78 @@ struct EscapeMaps
 
 static constexpr EscapeMaps escape_maps{};
 
+/// Appends one character to out, escaped if needed. Writes up to MAX_LEN bytes
+/// even for single byte characters, so the caller must provide that slack.
+inline char* write_escaped_char(const char c, char* const out) noexcept
+{
+    const auto& [replacement, len] = escape_maps.char_map[static_cast<uint8_t>(c)];
+    std::memcpy(out, replacement.data(), EscapeMaps::MAX_LEN);
+    return out + len;
+}
+
+/// Writes the characters in [begin, end) into out, escaping as needed. The
+/// caller must leave room for the worst case of six bytes per character plus
+/// EscapeMaps::MAX_LEN bytes of slack.
+inline char* write_escaped(const char* it, const char* const end, char* out) noexcept
+{
+#if defined(JSONWRITER_DETAIL_SSE2)
+    const __m128i quote = _mm_set1_epi8('"');
+    const __m128i backslash = _mm_set1_epi8('\\');
+    const __m128i control_limit = _mm_set1_epi8(0x1f);
+    const __m128i zero = _mm_setzero_si128();
+
+    while (end - it >= 16) {
+        __m128i chunk;
+        std::memcpy(&chunk, it, 16);
+
+        // Unsigned c < 0x20 without a signed compare, so bytes >= 0x80 are not
+        // mistaken for control characters.
+        const __m128i is_control = _mm_cmpeq_epi8(_mm_subs_epu8(chunk, control_limit), zero);
+        const __m128i needs_escape = _mm_or_si128(
+            _mm_or_si128(_mm_cmpeq_epi8(chunk, quote), _mm_cmpeq_epi8(chunk, backslash)),
+            is_control);
+
+        if (_mm_movemask_epi8(needs_escape) == 0) {
+            std::memcpy(out, &chunk, 16);
+            out += 16;
+            it += 16;
+        } else {
+            const char* const block_end = it + 16;
+            for (; it != block_end; ++it) {
+                out = write_escaped_char(*it, out);
+            }
+        }
+    }
+#elif defined(JSONWRITER_DETAIL_NEON)
+    const uint8x16_t quote = vdupq_n_u8('"');
+    const uint8x16_t backslash = vdupq_n_u8('\\');
+    const uint8x16_t control_limit = vdupq_n_u8(0x20);
+
+    while (end - it >= 16) {
+        const uint8x16_t chunk = vld1q_u8(reinterpret_cast<const uint8_t*>(it));
+        const uint8x16_t needs_escape = vorrq_u8(
+            vorrq_u8(vceqq_u8(chunk, quote), vceqq_u8(chunk, backslash)),
+            vcltq_u8(chunk, control_limit));
+
+        if (vmaxvq_u8(needs_escape) == 0) {
+            vst1q_u8(reinterpret_cast<uint8_t*>(out), chunk);
+            out += 16;
+            it += 16;
+        } else {
+            const char* const block_end = it + 16;
+            for (; it != block_end; ++it) {
+                out = write_escaped_char(*it, out);
+            }
+        }
+    }
+#endif
+
+    for (; it != end; ++it) {
+        out = write_escaped_char(*it, out);
+    }
+    return out;
+}
+
 template<typename T>
 class HasWriteFunction
 {
@@ -467,32 +550,26 @@ struct Formatter<std::string_view>
         buffer.make_room(2);
         buffer.append_no_grow('"');
 
-        const char* it = value.data();
-        const char* const end = it + value.size();
-        while (it != end) {
-            const size_t bulk_size = std::min(BULK, static_cast<size_t>(end - it));
+        if (!value.empty()) {
+            const char* it = value.data();
+            const char* const end = it + value.size();
+            while (it != end) {
+                const size_t bulk_size = std::min(BULK, static_cast<size_t>(end - it));
 
-            // Worst case output is EscapeMaps::MAX_ESCAPE_LEN characters per
-            // input character. The extra EscapeMaps::MAX_LEN bytes are needed
-            // because the escape sequences are copied as word-sized chunks that
-            // can overwrite the logical end. They also guarantee room for the
-            // terminating '"'.
-            buffer.make_room(BULK * detail::EscapeMaps::MAX_ESCAPE_LEN
-                             + detail::EscapeMaps::MAX_LEN);
+                // Worst case output is EscapeMaps::MAX_ESCAPE_LEN characters
+                // per input character. The extra EscapeMaps::MAX_LEN bytes are
+                // needed because the escape sequences are copied as word-sized
+                // chunks that can overwrite the logical end. They also
+                // guarantee room for the terminating '"'.
+                buffer.make_room(BULK * detail::EscapeMaps::MAX_ESCAPE_LEN
+                                 + detail::EscapeMaps::MAX_LEN);
 
-            // Write through a local pointer and commit it once per bulk so the
-            // compiler can keep the pointer in a register: a char store may
-            // alias the Buffer's pointer member.
-            char* out = buffer.working_end();
-            for (size_t i{0}; i < bulk_size; ++i) {
-                const auto& [replacement, len]
-                    = detail::escape_maps.char_map[static_cast<uint8_t>(it[i])];
-                std::copy_n(replacement.begin(), detail::EscapeMaps::MAX_LEN, out);
-                out += len;
+                // Write through a local pointer and commit it once per bulk so
+                // the compiler can keep the pointer in a register: a char store
+                // may alias the Buffer's pointer member.
+                buffer.consume(detail::write_escaped(it, it + bulk_size, buffer.working_end()));
+                it += bulk_size;
             }
-
-            it += bulk_size;
-            buffer.consume(out);
         }
 
         buffer.append_no_grow('"');
@@ -763,5 +840,7 @@ void write(Buffer& buffer, const std::initializer_list<T> value)
 } // namespace jsonwriter
 
 #undef JSONWRITER_UNLIKELY
+#undef JSONWRITER_DETAIL_SSE2
+#undef JSONWRITER_DETAIL_NEON
 
 #endif /* include guard */

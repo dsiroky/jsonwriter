@@ -159,8 +159,12 @@ else:
     elif env["OPTIMIZATION"] == "devel":
         env.AppendUnique(CCFLAGS=["-Og"])
     elif env["OPTIMIZATION"] == "full":
+        # -march=native pays off with gcc, but clang 21 emits znver4/AVX-512
+        # code for this workload that benchmarks slower than its default
+        # x86-64 target, so only gcc gets the host ISA.
+        native_flags = [] if "clang" in env["CXX"] else ["-march=native"]
         env.AppendUnique(
-            CCFLAGS=["-O3"],
+            CCFLAGS=["-O3"] + native_flags,
             LINKFLAGS=["-O3"],
         )
     else:
