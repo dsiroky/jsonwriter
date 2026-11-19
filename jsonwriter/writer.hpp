@@ -361,6 +361,15 @@ struct EscapeMaps
 
 static constexpr EscapeMaps escape_maps{};
 
+/// Worst case number of bytes that write_escaped() may touch for n characters.
+/// The escape output is at most MAX_ESCAPE_LEN bytes per character, and the
+/// last write may overwrite up to MAX_LEN - 1 bytes past the logical end, which
+/// MAX_LEN bytes of slack cover.
+constexpr size_t max_escaped_size(const size_t n) noexcept
+{
+    return n * EscapeMaps::MAX_ESCAPE_LEN + EscapeMaps::MAX_LEN;
+}
+
 /// Appends one character to out, escaped if needed. Writes up to MAX_LEN bytes
 /// even for single byte characters, so the caller must provide that slack.
 inline char* write_escaped_char(const char c, char* const out) noexcept
@@ -371,8 +380,7 @@ inline char* write_escaped_char(const char c, char* const out) noexcept
 }
 
 /// Writes the characters in [begin, end) into out, escaping as needed. The
-/// caller must leave room for the worst case of six bytes per character plus
-/// EscapeMaps::MAX_LEN bytes of slack.
+/// caller must leave room for max_escaped_size(end - begin) bytes.
 inline char* write_escaped(const char* it, const char* const end, char* out) noexcept
 {
 #if defined(JSONWRITER_DETAIL_SSE2)
@@ -579,13 +587,10 @@ struct Formatter<std::string_view>
             while (it != end) {
                 const size_t bulk_size = std::min(BULK, static_cast<size_t>(end - it));
 
-                // Worst case output is EscapeMaps::MAX_ESCAPE_LEN characters
-                // per input character. The extra EscapeMaps::MAX_LEN bytes are
-                // needed because the escape sequences are copied as word-sized
-                // chunks that can overwrite the logical end. They also
-                // guarantee room for the terminating '"'.
-                buffer.make_room(BULK * detail::EscapeMaps::MAX_ESCAPE_LEN
-                                 + detail::EscapeMaps::MAX_LEN);
+                // max_escaped_size() covers both the worst case output and the
+                // bytes the escape copies overwrite past the logical end. Those
+                // also guarantee room for the terminating '"'.
+                buffer.make_room(detail::max_escaped_size(bulk_size));
 
                 // Write through a local pointer and commit it once per bulk so
                 // the compiler can keep the pointer in a register: a char store
@@ -890,14 +895,42 @@ public:
     {
     }
 
-    AssignmentProxy operator[](const std::string_view key)
+    /// Writes the separator, the quoted key and the colon in one go. Keys are
+    /// usually short, so the per-bulk bookkeeping of
+    /// Formatter<std::string_view> is replaced by a single reservation and a
+    /// single output pointer per key.
+    JSONWRITER_DETAIL_ALWAYS_INLINE AssignmentProxy operator[](const std::string_view key)
     {
-        if (!m_first) {
-            m_buffer.append(',');
+        static constexpr size_t MAX_FUSED_KEY{128};
+
+        // Long keys are rare, so only they pay for the bulk bookkeeping of
+        // Formatter<std::string_view>.
+        if (key.size() > MAX_FUSED_KEY) JSONWRITER_UNLIKELY {
+            if (!m_first) {
+                m_buffer.append(',');
+            }
+            Formatter<std::string_view>::write(m_buffer, key);
+            m_buffer.append(':');
+        } else {
+            // max_escaped_size() covers write_escaped()'s worst case output
+            // and its overstore past the logical end. The remaining four bytes
+            // are the literals emitted around the key: the separator, the
+            // opening quote, the closing quote and the colon.
+            m_buffer.make_room(detail::max_escaped_size(key.size()) + 4);
+
+            char* out = m_buffer.working_end();
+            if (!m_first) {
+                *out++ = ',';
+            }
+            *out++ = '"';
+            if (!key.empty()) {
+                out = detail::write_escaped(key.data(), key.data() + key.size(), out);
+            }
+            *out++ = '"';
+            *out++ = ':';
+            m_buffer.consume(out);
         }
         m_first = false;
-        Formatter<std::string_view>::write(m_buffer, key);
-        m_buffer.append(':');
         return AssignmentProxy{m_buffer};
     }
 

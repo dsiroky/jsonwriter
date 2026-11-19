@@ -979,6 +979,67 @@ TEST(TestJsonWriter, Objects)
     }
 }
 
+TEST(TestJsonWriter, ObjectKeyWidths)
+{
+    const auto check = [&](const std::string_view key, const bool first) {
+        GuardedBuffer out{};
+        jsonwriter::write(out, jsonwriter::Object{[&](auto& object) {
+                              if (!first) {
+                                  object["head"] = 0;
+                              }
+                              object[key] = 1;
+                              object["tail"] = 2;
+                          }});
+
+        const std::string prefix{first ? "{" : "{\"head\":0,"};
+        EXPECT_EQ(to_str(out), prefix + to_json_string(key) + ":1,\"tail\":2}");
+        EXPECT_TRUE(out.ok());
+    };
+
+    const char specials[]{'"', '\\', '\b', '\f', '\n', '\r', '\t', '\x01', '\x1f'};
+    const size_t lengths[]{0, 1, 7, 8, 15, 16, 17, 63, 64, 65, 127, 128, 129, 200};
+
+    for (const size_t len : lengths) {
+        for (const char special : specials) {
+            std::string key(len, 'a');
+            const size_t positions[]{size_t{0}, len / 2, len == 0 ? size_t{0} : len - 1};
+            for (const size_t pos : positions) {
+                if (pos < len) {
+                    key[pos] = special;
+                }
+                for (const bool first : {true, false}) {
+                    check(key, first);
+                }
+            }
+        }
+        // Escape-free key of the same width exercises the bulk copy path.
+        for (const bool first : {true, false}) {
+            check(std::string(len, 'a'), first);
+        }
+    }
+
+    // Maximum expansion: every character escapes to six bytes. This is the only
+    // key shape that reaches the worst case reservation of the fused path (128
+    // characters) and of the Formatter<std::string_view> fallback (more than
+    // 128). The GuardedBuffer above turns an undersized reservation into a test
+    // failure instead of a silent overrun.
+    constexpr size_t MAX_FUSED_KEY{128};  // must match ObjectProxy::operator[]
+    const size_t max_expansion_lengths[]{16, MAX_FUSED_KEY, MAX_FUSED_KEY + 1, 200};
+    for (const size_t len : max_expansion_lengths) {
+        for (const char special : {'"', '\n', '\x01'}) {
+            for (const bool first : {true, false}) {
+                check(std::string(len, special), first);
+            }
+        }
+    }
+
+    // Embedded NUL: std::string_view carries the length, so the key must be
+    // escaped from the size rather than from the terminating NUL.
+    for (const bool first : {true, false}) {
+        check(std::string_view{"a\0b", 3}, first);
+    }
+}
+
 TEST(TestJsonWriter, ListOutlivesCallbackTemporary)
 {
     std::weak_ptr<int> lifetime;
