@@ -70,20 +70,20 @@ keep writing into it or reuse its output.
 
 ## Benchmarks
 
-gcc 11, -O3, Intel Core i7-8700K
+gcc 15.2, -O3, AMD Ryzen 7 PRO 7840HS
 
 ```
-BM_jsonwriter_simple_small_static_struct                    72.4 ns
-BM_jsonwriter_simple_small_static_struct_list             115950 ns
-BM_jsonwriter_simple_small_struct                            278 ns
-BM_jsonwriter_large_strings                                71194 ns
+BM_jsonwriter_simple_small_static_struct                    23.6 ns
+BM_jsonwriter_simple_small_static_struct_list              23945 ns
+BM_jsonwriter_simple_small_struct                            102 ns
+BM_jsonwriter_large_strings                                39279 ns
 
-BM_rapidjson_simple_small_static_struct                      245 ns
-BM_rapidjson_simple_small_static_struct_dump_only            189 ns
-BM_rapidjson_simple_small_static_struct_list              215528 ns
-BM_rapidjson_simple_small_struct                             799 ns
-BM_rapidjson_large_strings                                152619 ns
-BM_rapidjson_large_strings_dump_only                      142445 ns
+BM_rapidjson_simple_small_static_struct                      266 ns
+BM_rapidjson_simple_small_static_struct_dump_only            200 ns
+BM_rapidjson_simple_small_static_struct_list              666164 ns
+BM_rapidjson_simple_small_struct                             730 ns
+BM_rapidjson_large_strings                                142939 ns
+BM_rapidjson_large_strings_dump_only                      132419 ns
 ```
 
 ## Dependencies
